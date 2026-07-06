@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Adonis Field Force — Sales Dashboard</title>
+<script src="supabase.js"></script>
+<script src="xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#fff; --ink:#0f172a; --muted:#64748b;
+    --brand:#1d4ed8; --brand-dk:#1e3a8a; --good:#16a34a; --bad:#dc2626; --line:#e2e8f0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;color:var(--ink);}
+  .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .card{background:var(--panel);border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.10);padding:32px;width:100%;max-width:380px;}
+  .card h1{font-size:20px;margin:0 0 4px;}
+  .card p.sub{color:var(--muted);font-size:13px;margin:0 0 24px;}
+  label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
+  input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:16px;}
+  input:focus{outline:2px solid var(--brand);border-color:var(--brand);}
+  button{cursor:pointer;border:none;border-radius:8px;font-weight:600;font-size:14px;padding:11px 16px;}
+  .btn-primary{background:var(--brand);color:#fff;width:100%;}
+  .btn-primary:hover{background:var(--brand-dk);}
+  .btn-ghost{background:transparent;color:var(--brand);border:1px solid var(--line);}
+  .err{background:#fef2f2;color:var(--bad);font-size:13px;border-radius:8px;padding:10px 12px;margin-bottom:14px;}
+  .ok{background:#f0fdf4;color:var(--good);font-size:13px;border-radius:8px;padding:10px 12px;margin-bottom:14px;}
+
+  header{background:var(--bg);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  header .who{font-size:13px;color:#cbd5e1;}
+  header .who b{color:#fff;}
+  nav{display:flex;gap:8px;}
+  nav button{background:transparent;color:#cbd5e1;padding:8px 14px;border-radius:8px;}
+  nav button.active{background:#1e293b;color:#fff;}
+  main{max-width:1180px;margin:0 auto;padding:24px;}
+
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
+  select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff;}
+
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06);}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;}
+  .kpi .value{font-size:24px;font-weight:700;}
+  .kpi .sub{font-size:12px;margin-top:4px;color:var(--muted);}
+  .pos{color:var(--good);} .neg{color:var(--bad);}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.06);}
+  th,td{padding:10px 12px;text-align:left;font-size:13px;border-bottom:1px solid var(--line);}
+  th{background:#f8fafc;color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.03em;}
+  tr:last-child td{border-bottom:none;}
+  td.num,th.num{text-align:right;}
+  .bar-wrap{width:120px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px;}
+  .bar-fill{height:100%;background:var(--brand);}
+  .section-title{font-weight:700;font-size:15px;margin:28px 0 10px;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#eef2ff;color:var(--brand-dk);}
+  .muted{color:var(--muted);}
+  .upload-box{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(15,23,42,.06);}
+  .progress{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin:14px 0;}
+  .progress > div{height:100%;background:var(--good);width:0%;transition:width .2s;}
+  .small{font-size:12px;color:var(--muted);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+  CONFIG — fill in your own Supabase project values below
+============================================================ -->
+<script>
+const SUPABASE_URL = "https://jxwazdpsnupjiogmxozn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2F6ZHBzbnVwamlvZ214b3puIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3ODQ1NTUsImV4cCI6MjA5ODM2MDU1NX0.h5yHKPtm6CKoeZfFc2YsACvxhQqHKYd7wmvDk8LXsFA";
+const FY_MONTHS = [
+  {n:1,label:"April"},{n:2,label:"May"},{n:3,label:"June"},{n:4,label:"July"},
+  {n:5,label:"August"},{n:6,label:"September"},{n:7,label:"October"},{n:8,label:"November"},
+  {n:9,label:"December"},{n:10,label:"January"},{n:11,label:"February"},{n:12,label:"March"}
+];
+</script>
+
+<div id="app"></div>
+
+<script>
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let session = null; // { emp_id, name, designation, hq_code, hq_name, manager_emp_id, is_admin }
+let downlineIds = [];
+const app = document.getElementById("app");
+const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:1});
+const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
+const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
+
+// ---------------- LOGIN ----------------
+function renderLogin(errorMsg){
+  app.innerHTML = `
+    <div class="center-screen">
+      <div class="card">
+        <h1>Adonis Field Force</h1>
+        <p class="sub">Sign in with your Employee ID</p>
+        ${errorMsg ? `<div class="err">${errorMsg}</div>` : ""}
+        <form id="loginForm">
+          <label>Employee ID</label>
+          <input id="empId" autocomplete="username" placeholder="e.g. ADLA95" required />
+          <label>Password</label>
+          <input id="password" type="password" autocomplete="current-password" required />
+          <button class="btn-primary" type="submit">Sign in</button>
+        </form>
+        <p class="small" style="margin-top:14px;">Default password = your Employee ID, unless your admin has changed it.</p>
+      </div>
+    </div>`;
+  document.getElementById("loginForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const emp_id = document.getElementById("empId").value.trim().toUpperCase();
+    const password = document.getElementById("password").value;
+    const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
+    if (error || !data || data.length === 0) {
+      renderLogin("Invalid Employee ID or password.");
+      return;
+    }
+    session = data[0];
+    await loadDownline();
+    renderShell('dashboard');
+  };
+}
+
+async function loadDownline(){
+  const { data, error } = await sb.rpc('downline', { root: session.emp_id });
+  downlineIds = (data || []).map(r => r.emp_id);
+  if (downlineIds.length === 0) downlineIds = [session.emp_id];
+}
+
+function logout(){
+  session = null; downlineIds = [];
+  renderLogin();
+}
+
+// ---------------- SHELL ----------------
+function renderShell(tab){
+  app.innerHTML = `
+    <header>
+      <div>
+        <div style="font-weight:700;">Adonis Field Force — Sales Dashboard</div>
+        <div class="who">Logged in as <b>${session.name || session.emp_id}</b> · ${session.designation} ${session.hq_name ? "· " + session.hq_name : ""}</div>
+      </div>
+      <nav>
+        <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
+        ${session.is_admin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
+        <button id="navLogout">Logout</button>
+      </nav>
+    </header>
+    <main id="main"></main>
+  `;
+  document.getElementById("navDash").onclick = () => renderShell('dashboard');
+  if (session.is_admin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
+  document.getElementById("navLogout").onclick = logout;
+
+  if (tab === 'dashboard') renderDashboard();
+  else if (tab === 'admin') renderAdmin();
+}
+
+// ---------------- DASHBOARD ----------------
+const getFiscalMonthNum = (date) => {
+  const m = date.getMonth();
+  return m >= 3 ? m - 2 : m + 10;
+};
+const getFiscalYearStart = (date) => {
+  const m = date.getMonth();
+  const y = date.getFullYear();
+  return m >= 3 ? y : y - 1;
+};
+
+const defaultDate = new Date("2026-07-03T15:05:41+05:30");
+let currentYear = getFiscalYearStart(new Date());
+let currentMonth = getFiscalMonthNum(new Date());
+if (currentYear < 2025 || currentYear > 2030) {
+  currentYear = getFiscalYearStart(defaultDate);
+  currentMonth = getFiscalMonthNum(defaultDate);
+}
+let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd'
+let lastDashboardData = { kpis: [], brands: [], team: [] };
+
+async function renderDashboard(){
+  const main = document.getElementById("main");
+  main.innerHTML = `
+    <div class="toolbar">
+      <select id="viewTypeSel" style="margin-right: 10px;">
+        <option value="monthly" ${currentView==='monthly'?'selected':''}>Monthly</option>
+        <option value="bimonthly" ${currentView==='bimonthly'?'selected':''}>Bi-Monthly</option>
+        <option value="mtd" ${currentView==='mtd'?'selected':''}>MTD (Current Month)</option>
+        <option value="ytd" ${currentView==='ytd'?'selected':''}>YTD</option>
+      </select>
+      <select id="monthSel" style="margin-right: 10px;"></select>
+      <select id="yearSel" style="margin-right: 10px;">
+        <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27</option>
+        <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26</option>
+      </select>
+      <span class="pill">${downlineIds.length} employee${downlineIds.length>1?'s':''} in scope</span>
+      <button id="btnDownload" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Download Excel</button>
+    </div>
+    <div id="dashBody"><p class="muted">Loading…</p></div>
+  `;
+
+  const viewSel = document.getElementById("viewTypeSel");
+  const monthSel = document.getElementById("monthSel");
+  const yearSel = document.getElementById("yearSel");
+
+  const updateSelectorStates = () => {
+    if (currentView === 'mtd') {
+      const cy = getFiscalYearStart(new Date());
+      let cm = getFiscalMonthNum(new Date());
+      if (cy < 2025 || cy > 2030) {
+        currentYear = getFiscalYearStart(defaultDate);
+        currentMonth = getFiscalMonthNum(defaultDate);
+      } else {
+        currentYear = cy;
+        currentMonth = cm;
+      }
+      monthSel.value = currentMonth;
+      yearSel.value = currentYear;
+      monthSel.disabled = true;
+      yearSel.disabled = true;
+    } else {
+      monthSel.disabled = false;
+      yearSel.disabled = false;
+    }
+  };
+
+  monthSel.innerHTML = FY_MONTHS.map(m => `<option value="${m.n}" ${m.n===currentMonth?'selected':''}>${m.label}</option>`).join("");
+  
+  viewSel.onchange = () => {
+    currentView = viewSel.value;
+    updateSelectorStates();
+    loadDashboardData();
+  };
+  monthSel.onchange = () => { currentMonth = parseInt(monthSel.value); loadDashboardData(); };
+  yearSel.onchange = (e) => { currentYear = parseInt(e.target.value); loadDashboardData(); };
+
+  updateSelectorStates();
+  document.getElementById("btnDownload").onclick = downloadDashboardDataExcel;
+  await loadDashboardData();
+}
+
+const BRAND_CATEGORIES = {
+  "ARDEN 325": "Pillar",
+  "ARDEN 650": "Pillar",
+  "ARDEN MF SUSPENSION": "Pillar",
+  "COLDAID +": "Pillar",
+  "COLDAID SUSPENSION": "Pillar",
+  "MV 30 SYRUP": "Pillar",
+  "MV 30 TAB": "Pillar",
+  "ORT+": "Pillar",
+  "SERVIL JUNIOR": "Pillar",
+  "SERVIL-D": "Pillar",
+  "SERVIL-LS JUNIOR": "Pillar",
+  "SERVIL-LS SYRUP": "Pillar"
+};
+
+const getBrandCategory = (brandName) => {
+  if (!brandName) return "Others";
+  const norm = brandName.toString().trim().toUpperCase();
+  for (const k in BRAND_CATEGORIES) {
+    if (k.toUpperCase() === norm) {
+      return BRAND_CATEGORIES[k];
+    }
+  }
+  return "Others";
+};
+
+async function loadDashboardData(){
+  const body = document.getElementById("dashBody");
+  body.innerHTML = `<p class="muted">Loading…</p>`;
+
+  let months = [];
+  let periodLabel = "";
+  if (currentView === 'bimonthly') {
+    const startMonth = currentMonth % 2 === 1 ? currentMonth : currentMonth - 1;
+    months = [startMonth, startMonth + 1];
+    periodLabel = `${monthLabel(startMonth)}-${monthLabel(startMonth + 1)}`;
+  } else if (currentView === 'ytd') {
+    months = Array.from({length: currentMonth}, (_, i) => i + 1);
+    periodLabel = `YTD (Apr-${monthLabel(currentMonth)})`;
+  } else if (currentView === 'mtd') {
+    months = [currentMonth];
+    periodLabel = `MTD (${monthLabel(currentMonth)})`;
+  } else {
+    months = [currentMonth];
+    periodLabel = monthLabel(currentMonth);
+  }
+
+  // Helper to fetch all rows using pagination (overcoming the 1000-row PostgREST limit)
+  async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal) {
+    let allData = [];
+    let from = 0;
+    const orderCol = tableName === 'targets' ? 'id' : 'sale_id';
+    while (true) {
+      const { data, error } = await sb.from(tableName)
+        .select('*')
+        .in(filterCol, downlineIds)
+        .eq(yearCol, yVal)
+        .in(monthCol, monthsVal)
+        .order(orderCol)
+        .range(from, from + 999);
+      if (error) {
+        console.error("Error loading " + tableName, error);
+        break;
+      }
+      allData = allData.concat(data);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    return allData;
+  }
+
+  const [tgt, ach, lastYear] = await Promise.all([
+    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, months)
+  ]);
+
+  // Setup Date / MTD prorating constants
+  const todayDateObj = new Date();
+  const referenceDate = (todayDateObj.getFullYear() < 2025 || todayDateObj.getFullYear() > 2030) ? defaultDate : todayDateObj;
+  const todayStr = referenceDate.toISOString().slice(0, 10);
+  const lastYearTodayStr = new Date(referenceDate.getFullYear() - 1, referenceDate.getMonth(), referenceDate.getDate()).toISOString().slice(0, 10);
+
+  const daysInMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+  const elapsedDays = referenceDate.getDate();
+  const mtdRatio = elapsedDays / daysInMonth;
+
+  let targetMultiplier = 1.0;
+  let filteredAch = ach;
+  let filteredLastYear = lastYear;
+
+  if (currentView === 'mtd') {
+    filteredAch = ach.filter(r => !r.bill_date || r.bill_date <= todayStr);
+    filteredLastYear = lastYear.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
+  }
+
+  const sum = (rows, key) => rows.reduce((a,r) => a + (parseFloat(r[key])||0), 0);
+  const totalTargetVal = sum(tgt, 'val_target_per_be') * 100000 * targetMultiplier;
+  const totalTargetUnit = Math.round(sum(tgt, 'unit_target_per_be') * targetMultiplier);
+  const totalAchVal = sum(filteredAch, 'amount');
+  const totalAchUnit = sum(filteredAch, 'quantity');
+  const totalLastYearVal = sum(filteredLastYear, 'amount');
+  const growthVal = totalLastYearVal > 0 ? ((totalAchVal - totalLastYearVal) / totalLastYearVal * 100) : null;
+
+  // Save for Excel export
+  lastDashboardData.kpis = [
+    { "Metric": "Target (Value)", "Value": totalTargetVal },
+    { "Metric": "Achievement (Value)", "Value": totalAchVal },
+    { "Metric": "% Achievement", "Value": totalTargetVal > 0 ? (totalAchVal / totalTargetVal * 100).toFixed(1) + "%" : "—" },
+    { "Metric": "Growth vs Last Year", "Value": growthVal !== null ? growthVal.toFixed(1) + "%" : "—" }
+  ];
+
+  // Category-wise rollups
+  const categorySummary = {
+    Pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+    Others: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+  };
+
+  tgt.forEach(r => {
+    const cat = getBrandCategory(r.brand);
+    categorySummary[cat].targetVal += (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
+  });
+
+  filteredAch.forEach(r => {
+    const cat = getBrandCategory(r.brand);
+    categorySummary[cat].achVal += parseFloat(r.amount)||0;
+  });
+
+  filteredLastYear.forEach(r => {
+    const cat = getBrandCategory(r.brand);
+    categorySummary[cat].lastYearVal += parseFloat(r.amount)||0;
+  });
+
+  lastDashboardData.categories = [
+    {
+      "Category": "Pillar Brands",
+      "Target": categorySummary.Pillar.targetVal,
+      "Achievement": categorySummary.Pillar.achVal,
+      "% Achievement": categorySummary.Pillar.targetVal > 0 ? (categorySummary.Pillar.achVal / categorySummary.Pillar.targetVal * 100).toFixed(1) + "%" : "—",
+      "Growth YoY": categorySummary.Pillar.lastYearVal > 0 ? ((categorySummary.Pillar.achVal - categorySummary.Pillar.lastYearVal) / categorySummary.Pillar.lastYearVal * 100).toFixed(1) + "%" : "—"
+    },
+    {
+      "Category": "Other Brands",
+      "Target": categorySummary.Others.targetVal,
+      "Achievement": categorySummary.Others.achVal,
+      "% Achievement": categorySummary.Others.targetVal > 0 ? (categorySummary.Others.achVal / categorySummary.Others.targetVal * 100).toFixed(1) + "%" : "—",
+      "Growth YoY": categorySummary.Others.lastYearVal > 0 ? ((categorySummary.Others.achVal - categorySummary.Others.lastYearVal) / categorySummary.Others.lastYearVal * 100).toFixed(1) + "%" : "—"
+    }
+  ];
+
+  // brand-wise rollup
+  const brandMap = {};
+  tgt.forEach(r => {
+    const b = r.brand || 'Unknown';
+    brandMap[b] = brandMap[b] || {brand:b, targetVal:0, targetUnit:0, achVal:0, achUnit:0, lastYearVal:0};
+    brandMap[b].targetVal += (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
+    brandMap[b].targetUnit += (parseFloat(r.unit_target_per_be)||0) * targetMultiplier;
+  });
+  filteredAch.forEach(r => {
+    const b = r.brand || 'Unknown';
+    brandMap[b] = brandMap[b] || {brand:b, targetVal:0, targetUnit:0, achVal:0, achUnit:0, lastYearVal:0};
+    brandMap[b].achVal += parseFloat(r.amount)||0;
+    brandMap[b].achUnit += parseFloat(r.quantity)||0;
+  });
+  filteredLastYear.forEach(r => {
+    const b = r.brand || 'Unknown';
+    if (brandMap[b]) brandMap[b].lastYearVal += parseFloat(r.amount)||0;
+  });
+  const brandRows = Object.values(brandMap).sort((a,b) => b.targetVal - a.targetVal);
+
+  lastDashboardData.brands = brandRows.map(r => {
+    const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
+    const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
+    return {
+      "Brand": r.brand,
+      "Target (Value)": r.targetVal,
+      "Achievement (Value)": r.achVal,
+      "% Achievement": pct !== null ? pct.toFixed(1) + "%" : "—",
+      "Target (Units)": r.targetUnit,
+      "Achievement (Units)": r.achUnit,
+      "Growth YoY": g !== null ? g.toFixed(1) + "%" : "—"
+    };
+  });
+
+  // team rollup (BE wise view for managers)
+  let teamHtml = "";
+  lastDashboardData.team = [];
+  if (session.designation !== 'BE') {
+    const { data: team } = await sb.from('employees').select('*').in('emp_id', downlineIds).eq('designation', 'BE');
+    const teamMap = {};
+    (team||[]).forEach(e => teamMap[e.emp_id] = {
+      emp: e,
+      pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+      others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+      total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+    });
+
+    tgt.forEach(r => {
+      const entry = teamMap[r.emp_id];
+      if (entry) {
+        const cat = getBrandCategory(r.brand).toLowerCase();
+        const val = (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
+        entry[cat].targetVal += val;
+        entry.total.targetVal += val;
+      }
+    });
+
+    filteredAch.forEach(r => {
+      const entry = teamMap[r.be_emp_id];
+      if (entry) {
+        const cat = getBrandCategory(r.brand).toLowerCase();
+        const val = parseFloat(r.amount)||0;
+        entry[cat].achVal += val;
+        entry.total.achVal += val;
+      }
+    });
+
+    filteredLastYear.forEach(r => {
+      const entry = teamMap[r.be_emp_id];
+      if (entry) {
+        const cat = getBrandCategory(r.brand).toLowerCase();
+        const val = parseFloat(r.amount)||0;
+        entry[cat].lastYearVal += val;
+        entry.total.lastYearVal += val;
+      }
+    });
+
+    const teamRows = Object.values(teamMap).filter(t => t.total.targetVal > 0 || t.total.achVal > 0)
+      .sort((a,b) => b.total.targetVal - a.total.targetVal);
+    
+    lastDashboardData.team = teamRows.map(t => {
+      const pPct = t.pillar.targetVal > 0 ? (t.pillar.achVal / t.pillar.targetVal * 100) : null;
+      const pG = t.pillar.lastYearVal > 0 ? ((t.pillar.achVal - t.pillar.lastYearVal) / t.pillar.lastYearVal * 100) : null;
+      const oPct = t.others.targetVal > 0 ? (t.others.achVal / t.others.targetVal * 100) : null;
+      const oG = t.others.lastYearVal > 0 ? ((t.others.achVal - t.others.lastYearVal) / t.others.lastYearVal * 100) : null;
+      const tPct = t.total.targetVal > 0 ? (t.total.achVal / t.total.targetVal * 100) : null;
+      return {
+        "BE Employee ID": t.emp.emp_id,
+        "BE Name": t.emp.name || "—",
+        "HQ": t.emp.hq_name || "—",
+        "Pillar Target": t.pillar.targetVal,
+        "Pillar Achievement": t.pillar.achVal,
+        "Pillar % Ach": pPct !== null ? pPct.toFixed(1) + "%" : "—",
+        "Pillar YoY Growth": pG !== null ? pG.toFixed(1) + "%" : "—",
+        "Others Target": t.others.targetVal,
+        "Others Achievement": t.others.achVal,
+        "Others % Ach": oPct !== null ? oPct.toFixed(1) + "%" : "—",
+        "Others YoY Growth": oG !== null ? oG.toFixed(1) + "%" : "—",
+        "Total Target": t.total.targetVal,
+        "Total Achievement": t.total.achVal,
+        "Total % Ach": tPct !== null ? tPct.toFixed(1) + "%" : "—"
+      };
+    });
+
+    if (teamRows.length) {
+      teamHtml = `
+        <div class="section-title">BE-wise Category Performance — ${periodLabel} ${currentYear}</div>
+        <div style="overflow-x: auto; margin-bottom: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.06);">
+          <table style="min-width: 1050px; width: 100%;">
+            <thead>
+              <tr>
+                <th rowspan="2" style="vertical-align: middle;">BE Employee</th>
+                <th rowspan="2" style="vertical-align: middle;">HQ</th>
+                <th colspan="4" style="text-align:center; border-bottom: 2px solid var(--line); font-weight: bold; background: #eef2ff;">Pillar Brands</th>
+                <th colspan="4" style="text-align:center; border-bottom: 2px solid var(--line); font-weight: bold; background: #f8fafc;">Other Brands</th>
+                <th colspan="3" style="text-align:center; border-bottom: 2px solid var(--line); font-weight: bold; background: #f0fdf4;">Total</th>
+              </tr>
+              <tr>
+                <th class="num" style="background: #eef2ff; font-size: 11px;">Tgt</th>
+                <th class="num" style="background: #eef2ff; font-size: 11px;">Ach</th>
+                <th class="num" style="background: #eef2ff; font-size: 11px;">%</th>
+                <th class="num" style="background: #eef2ff; font-size: 11px;">YoY</th>
+                <th class="num" style="background: #f8fafc; font-size: 11px;">Tgt</th>
+                <th class="num" style="background: #f8fafc; font-size: 11px;">Ach</th>
+                <th class="num" style="background: #f8fafc; font-size: 11px;">%</th>
+                <th class="num" style="background: #f8fafc; font-size: 11px;">YoY</th>
+                <th class="num" style="background: #f0fdf4; font-size: 11px;">Tgt</th>
+                <th class="num" style="background: #f0fdf4; font-size: 11px;">Ach</th>
+                <th class="num" style="background: #f0fdf4; font-size: 11px;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${teamRows.map(t => {
+                const pPct = t.pillar.targetVal > 0 ? (t.pillar.achVal / t.pillar.targetVal * 100) : null;
+                const pG = t.pillar.lastYearVal > 0 ? ((t.pillar.achVal - t.pillar.lastYearVal) / t.pillar.lastYearVal * 100) : null;
+                const oPct = t.others.targetVal > 0 ? (t.others.achVal / t.others.targetVal * 100) : null;
+                const oG = t.others.lastYearVal > 0 ? ((t.others.achVal - t.others.lastYearVal) / t.others.lastYearVal * 100) : null;
+                const tPct = t.total.targetVal > 0 ? (t.total.achVal / t.total.targetVal * 100) : null;
+                
+                return `<tr>
+                  <td><b>${t.emp.name || t.emp.emp_id}</b> <span class="muted">(${t.emp.emp_id})</span></td>
+                  <td>${t.emp.hq_name||''}</td>
+                  
+                  <td class="num" style="background: #fafbfe;">${fmtNum(t.pillar.targetVal)}</td>
+                  <td class="num" style="background: #fafbfe;">${fmtNum(t.pillar.achVal)}</td>
+                  <td class="num" style="background: #fafbfe;">${pPct !== null ? fmtPct(pPct) : '—'}</td>
+                  <td class="num ${pG === null ? '' : (pG >= 0 ? 'pos' : 'neg')}" style="background: #fafbfe;">${pG !== null ? fmtPct(pG) : '—'}</td>
+                  
+                  <td class="num" style="background: #fcfdfe;">${fmtNum(t.others.targetVal)}</td>
+                  <td class="num" style="background: #fcfdfe;">${fmtNum(t.others.achVal)}</td>
+                  <td class="num" style="background: #fcfdfe;">${oPct !== null ? fmtPct(oPct) : '—'}</td>
+                  <td class="num ${oG === null ? '' : (oG >= 0 ? 'pos' : 'neg')}" style="background: #fcfdfe;">${oG !== null ? fmtPct(oG) : '—'}</td>
+                  
+                  <td class="num" style="font-weight: 600; background: #fafdfb;">${fmtNum(t.total.targetVal)}</td>
+                  <td class="num" style="font-weight: 600; background: #fafdfb;">${fmtNum(t.total.achVal)}</td>
+                  <td class="num" style="font-weight: 600; background: #fafdfb;">${tPct !== null ? fmtPct(tPct) : '—'}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>`;
+    }
+  }
+
+  let mtdNote = "";
+  if (currentView === 'mtd') {
+    mtdNote = `<div class="sub" style="font-size:11px; margin-top:2px;">Sales up to day ${elapsedDays} (Full target)</div>`;
+  }
+
+  body.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="label">Target (Value)</div>
+        <div class="value">${fmtNum(totalTargetVal)}</div>
+        ${mtdNote}
+      </div>
+      <div class="kpi"><div class="label">Achievement (Value)</div><div class="value">${fmtNum(totalAchVal)}</div></div>
+      <div class="kpi"><div class="label">% Achievement</div><div class="value">${totalTargetVal>0?fmtPct(totalAchVal/totalTargetVal*100):'—'}</div></div>
+      <div class="kpi"><div class="label">Growth vs Last Year</div>
+        <div class="value ${growthVal===null?'':(growthVal>=0?'pos':'neg')}">${growthVal===null?'—':fmtPct(growthVal)}</div>
+        <div class="sub">${growthVal===null? 'Upload FY'+(currentYear-1)+' data to enable' : 'vs ' + periodLabel + ' ' + (currentYear-1)}</div>
+      </div>
+    </div>
+
+    <div class="section-title">Brand Category Summary — ${periodLabel} ${currentYear}</div>
+    <div style="overflow-x: auto; margin-bottom: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.06);">
+      <table style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th class="num">Target (Val)</th>
+            <th class="num">Achievement (Val)</th>
+            <th class="num">% Ach.</th>
+            <th class="num">Growth YoY</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Pillar Brands</b></td>
+            <td class="num">${fmtNum(categorySummary.Pillar.targetVal)}</td>
+            <td class="num">${fmtNum(categorySummary.Pillar.achVal)}</td>
+            <td class="num">
+              <span class="bar-wrap"><span class="bar-fill" style="width:${Math.min(categorySummary.Pillar.targetVal > 0 ? (categorySummary.Pillar.achVal / categorySummary.Pillar.targetVal * 100) : 0, 100)}%"></span></span>
+              ${categorySummary.Pillar.targetVal > 0 ? fmtPct(categorySummary.Pillar.achVal / categorySummary.Pillar.targetVal * 100) : '—'}
+            </td>
+            <td class="num ${categorySummary.Pillar.lastYearVal > 0 ? ((categorySummary.Pillar.achVal - categorySummary.Pillar.lastYearVal) >= 0 ? 'pos' : 'neg') : ''}">
+              ${categorySummary.Pillar.lastYearVal > 0 ? fmtPct((categorySummary.Pillar.achVal - categorySummary.Pillar.lastYearVal) / categorySummary.Pillar.lastYearVal * 100) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td><b>Other Brands</b></td>
+            <td class="num">${fmtNum(categorySummary.Others.targetVal)}</td>
+            <td class="num">${fmtNum(categorySummary.Others.achVal)}</td>
+            <td class="num">
+              <span class="bar-wrap"><span class="bar-fill" style="width:${Math.min(categorySummary.Others.targetVal > 0 ? (categorySummary.Others.achVal / categorySummary.Others.targetVal * 100) : 0, 100)}%"></span></span>
+              ${categorySummary.Others.targetVal > 0 ? fmtPct(categorySummary.Others.achVal / categorySummary.Others.targetVal * 100) : '—'}
+            </td>
+            <td class="num ${categorySummary.Others.lastYearVal > 0 ? ((categorySummary.Others.achVal - categorySummary.Others.lastYearVal) >= 0 ? 'pos' : 'neg') : ''}">
+              ${categorySummary.Others.lastYearVal > 0 ? fmtPct((categorySummary.Others.achVal - categorySummary.Others.lastYearVal) / categorySummary.Others.lastYearVal * 100) : '—'}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Brand-wise — ${periodLabel} ${currentYear}</div>
+    <div style="overflow-x: auto; margin-bottom: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.06);">
+      <table style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Brand</th>
+            <th>Category</th>
+            <th class="num">Target (Val)</th>
+            <th class="num">Achievement (Val)</th>
+            <th class="num">% Ach.</th>
+            <th class="num">Target (Units)</th>
+            <th class="num">Achievement (Units)</th>
+            <th class="num">Growth YoY</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${brandRows.map(r => {
+            const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
+            const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
+            return `<tr>
+              <td>${r.brand}</td>
+              <td><span class="pill" style="background:${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">${getBrandCategory(r.brand)}</span></td>
+              <td class="num">${fmtNum(r.targetVal)}</td>
+              <td class="num">${fmtNum(r.achVal)}</td>
+              <td class="num">
+                <span class="bar-wrap"><span class="bar-fill" style="width:${Math.min(pct||0,100)}%"></span></span>
+                ${pct!==null?fmtPct(pct):'—'}
+              </td>
+              <td class="num">${fmtNum(r.targetUnit)}</td>
+              <td class="num">${fmtNum(r.achUnit)}</td>
+              <td class="num ${g===null?'':(g>=0?'pos':'neg')}">${g===null?'—':fmtPct(g)}</td>
+            </tr>`;
+          }).join("") || `<tr><td colspan="8" class="muted">No data for this period.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    ${teamHtml}
+  `;
+}
+
+function downloadDashboardDataExcel() {
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    const ws1 = XLSX.utils.json_to_sheet(lastDashboardData.kpis);
+    XLSX.utils.book_append_sheet(wb, ws1, "KPI Summary");
+
+    if (lastDashboardData.categories && lastDashboardData.categories.length > 0) {
+      const wsCat = XLSX.utils.json_to_sheet(lastDashboardData.categories);
+      XLSX.utils.book_append_sheet(wb, wsCat, "Category Performance");
+    }
+    
+    const ws2 = XLSX.utils.json_to_sheet(lastDashboardData.brands);
+    XLSX.utils.book_append_sheet(wb, ws2, "Brand Performance");
+    
+    if (lastDashboardData.team && lastDashboardData.team.length > 0) {
+      const ws3 = XLSX.utils.json_to_sheet(lastDashboardData.team);
+      XLSX.utils.book_append_sheet(wb, ws3, "BE Performance");
+    }
+    
+    let label = "";
+    if (currentView === 'bimonthly') {
+      const startMonth = currentMonth % 2 === 1 ? currentMonth : currentMonth - 1;
+      label = `BiMonthly_${monthLabel(startMonth)}_${monthLabel(startMonth + 1)}`;
+    } else if (currentView === 'ytd') {
+      label = `YTD_Apr_to_${monthLabel(currentMonth)}`;
+    } else if (currentView === 'mtd') {
+      label = `MTD_${monthLabel(currentMonth)}`;
+    } else {
+      label = `Monthly_${monthLabel(currentMonth)}`;
+    }
+    
+    XLSX.writeFile(wb, `Sales_Dashboard_${label}_${currentYear}.xlsx`);
+  } catch (err) {
+    alert("Export failed: " + err.message);
+  }
+}
+
+// ---------------- ADMIN UPLOAD ----------------
+function renderAdmin(){
+  const main = document.getElementById("main");
+  main.innerHTML = `
+    <div class="upload-box">
+      <div class="section-title" style="margin-top:0;">Upload daily / monthly sales report</div>
+      <p class="small">Upload the standard sales export (same column layout as APR26_SALE / May26_Sales_Interact reports). Product codes are clubbed automatically using the product_clubbing table.</p>
+      <div class="row" style="margin:14px 0;">
+        <div>
+          <label>Sales period — Month</label>
+          <select id="upMonth">${FY_MONTHS.map(m=>`<option value="${m.n}">${m.label}</option>`).join("")}</select>
+        </div>
+        <div>
+          <label>Year</label>
+          <select id="upYear" style="width:110px;">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+          </select>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" />
+      <div class="progress"><div id="progBar"></div></div>
+      <div id="upStatus" class="small"></div>
+    </div>
+
+    <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Manage Uploaded Files</div>
+      <p class="small">Below is a list of recent sales data uploads. Delete any incorrect or duplicate uploads if needed.</p>
+      <div style="overflow-x: auto; margin-top:14px;">
+        <table style="width:100%;">
+          <thead>
+            <tr>
+              <th>Upload Time</th>
+              <th>Period</th>
+              <th class="num">Row Count</th>
+              <th class="num">Total Amount</th>
+              <th>Uploaded By</th>
+              <th style="text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="uploadsList">
+            <tr><td colspan="6" class="muted" style="text-align:center;">Loading uploads…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Upload Employee Master</div>
+      <p class="small">Upload an Excel or CSV file to replace or update the employee master data. Columns required: <b>emp_id, name, designation, hq_code, hq_name, manager_emp_id, state, region</b>. PASSWORDS will be automatically reset to Employee ID on import.</p>
+      <input type="file" id="empFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
+      <div class="progress"><div id="empProgBar"></div></div>
+      <div id="empUpStatus" class="small"></div>
+    </div>
+  `;
+  document.getElementById("fileInput").onchange = handleUpload;
+  document.getElementById("empFileInput").onchange = handleEmployeeUpload;
+  loadUploadedFiles();
+}
+
+function parseBillDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return val;
+  }
+  const str = val.toString().trim();
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const num = parseFloat(str);
+    const d = new Date((num - 25569) * 86400 * 1000);
+    if (!isNaN(d.getTime())) return d;
+  }
+  let parts = str.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      if (!isNaN(d.getTime())) return d;
+    } else {
+      const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
+async function handleUpload(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("upStatus");
+  const progBar = document.getElementById("progBar");
+  const period_month = parseInt(document.getElementById("upMonth").value);
+  const period_year = parseInt(document.getElementById("upYear").value);
+
+  status.textContent = "Reading file…";
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const ws = wb.Sheets["Report"] || wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  // locate header row dynamically (column containing "Distributor Code" or similar)
+  let headerIdx = rows.findIndex(r => r && r.some(c => c && ["DISTRIBUTOR CODE", "STOCKIST CODE", "PERIOD_YEAR"].includes(c.toString().trim().toUpperCase())));
+  if (headerIdx === -1) { status.textContent = "Could not find header row — check file format."; return; }
+
+  const headersRow = rows[headerIdx];
+  const findColIdx = (names) => {
+    // exact match first
+    let idx = headersRow.findIndex(h => {
+      if (h === null || h === undefined) return false;
+      const val = h.toString().trim().toUpperCase();
+      return names.some(n => val === n.toUpperCase());
+    });
+    if (idx !== -1) return idx;
+    // partial match fallback
+    return headersRow.findIndex(h => {
+      if (h === null || h === undefined) return false;
+      const val = h.toString().trim().toUpperCase();
+      return names.some(n => val.includes(n.toUpperCase()));
+    });
+  };
+
+  const colDistributorCode = findColIdx(["Distributor Code", "Distributor", "period_year"]); 
+  const colStockistCode = findColIdx(["Stockist Code", "Stockist_Code", "Stk Code"]);
+  const colStockistName = findColIdx(["Stockist Name", "Stockist_Name", "Stk Name"]);
+  const colBillDate = findColIdx(["Bill Date", "Invoice Date", "bill_date", "Date"]);
+  const colHqCode = findColIdx(["HQ Code", "hq_code", "Hq Code"]);
+  const colHqName = findColIdx(["HQ Name", "hq_name", "Hq Name"]);
+  const colMrEmpId = findColIdx(["MR Code", "mr_emp_id", "MR Emp ID", "Emp Code"]);
+  const colMrName = findColIdx(["MR Name", "mr_name", "Emp Name"]);
+  const colRawProductCode = findColIdx(["Product Code", "raw_product_code", "Item Code"]);
+  const colRawProductName = findColIdx(["Product Name", "raw_product_name", "Item Name"]);
+  const colQuantity = findColIdx(["Quantity", "quantity", "Qty"]);
+  const colAmount = findColIdx(["Amount", "amount", "Value", "Net Amount"]);
+
+  if (colStockistCode === -1 || colAmount === -1) {
+    status.textContent = "Could not find essential columns (Stockist Code & Amount) in header row.";
+    return;
+  }
+
+  status.textContent = "Loading product clubbing table…";
+  const { data: clubbing } = await sb.from('product_clubbing').select('*');
+  const clubMap = {};
+  (clubbing||[]).forEach(c => clubMap[c.raw_product_code] = c);
+
+  const dataRows = rows.slice(headerIdx + 1).filter(r => r && (r[colDistributorCode !== -1 ? colDistributorCode : 0] || r[colStockistCode]));
+  status.textContent = `Parsing ${dataRows.length} rows…`;
+
+  const out = [];
+  const periodsToClear = new Set();
+  for (const r of dataRows) {
+    const quantity = colQuantity !== -1 ? r[colQuantity] : 0;
+    const amount = colAmount !== -1 ? r[colAmount] : 0;
+    if (quantity == null && amount == null) continue;
+    
+    const rawCode = colRawProductCode !== -1 ? (r[colRawProductCode]||"").toString().trim() : "";
+    const club = clubMap[rawCode];
+    const rawDateVal = colBillDate !== -1 ? r[colBillDate] : null;
+    const parsedDate = parseBillDate(rawDateVal);
+    
+    let r_month = period_month;
+    let r_year = period_year;
+    
+    if (parsedDate) {
+      r_month = getFiscalMonthNum(parsedDate);
+      r_year = getFiscalYearStart(parsedDate);
+    }
+    
+    periodsToClear.add(`${r_year}-${r_month}`);
+    
+    out.push({
+      period_year: r_year,
+      period_month: r_month,
+      bill_date: parsedDate ? parsedDate.toISOString().slice(0,10) : null,
+      distributor_code: colDistributorCode !== -1 ? (r[colDistributorCode] || '').toString().trim() : null,
+      stockist_code: colStockistCode !== -1 ? (r[colStockistCode]||"").toString().trim() : null,
+      stockist_name: colStockistName !== -1 ? r[colStockistName] : null,
+      hq_code: colHqCode !== -1 ? (r[colHqCode]||"").toString().trim() : null,
+      hq_name: colHqName !== -1 ? r[colHqName] : null,
+      mr_emp_id: colMrEmpId !== -1 ? r[colMrEmpId] : null,
+      mr_name: colMrName !== -1 ? r[colMrName] : null,
+      raw_product_code: rawCode,
+      raw_product_name: colRawProductName !== -1 ? r[colRawProductName] : null,
+      brand: club ? club.canonical_brand : (colRawProductName !== -1 ? r[colRawProductName] : null),
+      canonical_product_code: club ? club.canonical_product_code : rawCode,
+      quantity: parseFloat(quantity)||0,
+      amount: parseFloat(amount)||0,
+      uploaded_by: session.emp_id,
+    });
+  }
+
+  status.textContent = "Clearing existing sales data for periods in the uploaded file…";
+  for (const p of periodsToClear) {
+    const [y, m] = p.split("-").map(Number);
+    const { error: clearError } = await sb.from('sales')
+      .delete()
+      .eq('period_year', y)
+      .eq('period_month', m);
+    if (clearError) {
+      console.warn(`Could not clear sales data for period ${y}-${m}:`, clearError.message);
+    }
+  }
+
+  status.textContent = `Uploading ${out.length} rows to Supabase…`;
+  const batchSize = 500;
+  for (let i = 0; i < out.length; i += batchSize) {
+    const batch = out.slice(i, i + batchSize);
+    const { error } = await sb.from('sales').insert(batch);
+    if (error) { status.textContent = "Error: " + error.message; return; }
+    progBar.style.width = Math.round(((i+batch.length)/out.length)*100) + "%";
+  }
+  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Uploaded ${out.length} sales rows.`;
+  loadUploadedFiles();
+}
+
+async function loadUploadedFiles() {
+  const tbody = document.getElementById("uploadsList");
+  if (!tbody) return;
+
+  // Try RPC first
+  let { data, error } = await sb.rpc('get_uploaded_files');
+  
+  if (error) {
+    console.warn("RPC get_uploaded_files failed, falling back to client-side grouping...", error);
+    // Fallback: Fetch all uploaded_at, period_year, period_month, amount, uploaded_by from sales
+    const { data: rawSales, error: rawError } = await sb.from('sales')
+      .select('uploaded_at, period_year, period_month, amount, uploaded_by')
+      .order('id', { ascending: false })
+      .limit(1000);
+    if (rawError) {
+      tbody.innerHTML = `<tr><td colspan="6" class="err">Error loading uploads: ${rawError.message}</td></tr>`;
+      return;
+    }
+    
+    // Group in JS
+    const groups = {};
+    (rawSales || []).forEach(r => {
+      if (!r.uploaded_at) return;
+      const key = r.uploaded_at.substring(0, 16); // YYYY-MM-DD HH:MM
+      if (!groups[key]) {
+        groups[key] = {
+          upload_group_id: key,
+          period_year: r.period_year,
+          period_month: r.period_month,
+          row_count: 0,
+          total_amount: 0.0,
+          uploaded_at: r.uploaded_at,
+          uploaded_by: r.uploaded_by
+        };
+      }
+      groups[key].row_count++;
+      groups[key].total_amount += parseFloat(r.amount) || 0;
+    });
+    data = Object.values(groups).sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
+  }
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;padding:12px;">No uploads found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(u => {
+    const formattedDate = new Date(u.uploaded_at).toLocaleString();
+    const periodStr = `${monthLabel(u.period_month)} ${u.period_year}`;
+    const amtStr = (u.total_amount || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+    return `
+      <tr>
+        <td>${formattedDate}</td>
+        <td><b>${periodStr}</b></td>
+        <td class="num">${u.row_count}</td>
+        <td class="num" style="font-weight:600;">${amtStr}</td>
+        <td>${u.uploaded_by || '—'}</td>
+        <td style="text-align:center;">
+          <button class="btn-ghost" style="color:var(--bad); border-color:var(--bad); padding:4px 8px; font-size:12px;" onclick="deleteUploadGroup('${u.upload_group_id}')">Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function deleteUploadGroup(groupId) {
+  if (!confirm(`Are you sure you want to delete all sales records from this upload (${groupId})?`)) return;
+  
+  // Try RPC first
+  const { error } = await sb.rpc('delete_upload_group', { p_upload_group_id: groupId });
+  
+  if (error) {
+    console.warn("RPC delete_upload_group failed, falling back to direct delete...", error);
+    // Direct delete fallback
+    const { error: delError } = await sb.from('sales')
+      .delete()
+      .gte('uploaded_at', `${groupId}:00`)
+      .lte('uploaded_at', `${groupId}:59`);
+      
+    if (delError) {
+      alert("Failed to delete upload group: " + delError.message);
+      return;
+    }
+  }
+  
+  alert("Successfully deleted upload group.");
+  loadUploadedFiles();
+}
+
+window.deleteUploadGroup = deleteUploadGroup;
+
+async function handleEmployeeUpload(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("empUpStatus");
+  const progBar = document.getElementById("empProgBar");
+
+  status.textContent = "Reading file…";
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws);
+
+  if (rows.length === 0) {
+    status.textContent = "The file is empty.";
+    return;
+  }
+
+  // Validate columns
+  const firstRow = rows[0];
+  const required = ['emp_id', 'name', 'designation', 'hq_code', 'hq_name', 'manager_emp_id', 'state', 'region'];
+  const missing = required.filter(col => !(col in firstRow));
+  if (missing.length > 0) {
+    status.textContent = `Error: Missing columns: ${missing.join(", ")}`;
+    return;
+  }
+
+  status.textContent = `Clearing old employee records (except ADMIN)…`;
+  // Delete all non-admin employees first (keeps hierarchy updates clean)
+  const { error: delError } = await sb.from('employees').delete().neq('emp_id', 'ADLA02');
+  if (delError) {
+    status.textContent = "Failed to clear existing employees: " + delError.message;
+    return;
+  }
+
+  status.textContent = `Uploading ${rows.length} new employees…`;
+  const batchSize = 100;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize).map(r => ({
+      emp_id: (r.emp_id || '').toString().trim(),
+      name: (r.name || '').toString().trim(),
+      designation: (r.designation || '').toString().trim(),
+      hq_code: (r.hq_code || '').toString().trim(),
+      hq_name: (r.hq_name || '').toString().trim(),
+      manager_emp_id: r.manager_emp_id ? r.manager_emp_id.toString().trim() : null,
+      state: (r.state || '').toString().trim(),
+      region: (r.region || '').toString().trim(),
+      is_admin: (r.emp_id || '').toString().trim() === 'ADLA02'
+    }));
+
+    // Filter out ADLA02 if already present to prevent duplicate primary key violation
+    const filteredBatch = batch.filter(x => x.emp_id !== 'ADLA02');
+
+    if (filteredBatch.length > 0) {
+      const { error: insError } = await sb.from('employees').insert(filteredBatch);
+      if (insError) {
+        status.textContent = "Failed to insert batch: " + insError.message;
+        return;
+      }
+    }
+
+    progBar.style.width = Math.round(((i + batch.length) / rows.length) * 50) + "%";
+  }
+
+  status.textContent = `Initializing default employee passwords (to Employee ID)…`;
+  // Set password for all loaded employees
+  for (let i = 0; i < rows.length; i++) {
+    const empId = rows[i].emp_id;
+    if (empId) {
+      await sb.rpc('set_password', { p_emp_id: empId.toString().trim(), p_password: empId.toString().trim() });
+    }
+    progBar.style.width = (50 + Math.round((i / rows.length) * 50)) + "%";
+  }
+
+  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${rows.length} employee records and set default passwords.`;
+}
+
+// ---------------- INIT ----------------
+renderLogin();
+</script>
+</body>
+</html>
