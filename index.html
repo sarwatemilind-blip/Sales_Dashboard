@@ -763,7 +763,7 @@ function parseBillDate(val) {
     const d = new Date((num - 25569) * 86400 * 1000);
     if (!isNaN(d.getTime())) return d;
   }
-  let parts = str.split(/[-/]/);
+  let parts = str.split(/[-/.]/);
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
