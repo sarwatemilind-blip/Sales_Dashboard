@@ -954,7 +954,8 @@ async function loadUploadedFiles() {
 
   tbody.innerHTML = data.map(u => {
     const formattedDate = new Date(u.uploaded_at).toLocaleString();
-    const periodStr = `${monthLabel(u.period_month)} ${u.period_year}`;
+    const calYear = u.period_month >= 10 ? u.period_year + 1 : u.period_year;
+    const periodStr = `${monthLabel(u.period_month)} ${calYear}`;
     const amtStr = (u.total_amount || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
     return `
       <tr>
