@@ -864,7 +864,7 @@ async function handleUpload(e){
     out.push({
       period_year: r_year,
       period_month: r_month,
-      bill_date: parsedDate ? parsedDate.toISOString().slice(0,10) : null,
+      bill_date: parsedDate ? `${parsedDate.getFullYear()}-${String(parsedDate.getMonth()+1).padStart(2,'0')}-${String(parsedDate.getDate()).padStart(2,'0')}` : null,
       distributor_code: colDistributorCode !== -1 ? (r[colDistributorCode] || '').toString().trim() : null,
       stockist_code: colStockistCode !== -1 ? (r[colStockistCode]||"").toString().trim() : null,
       stockist_name: colStockistName !== -1 ? r[colStockistName] : null,
