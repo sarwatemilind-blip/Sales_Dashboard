@@ -85,7 +85,7 @@ let session = null; // { emp_id, name, designation, hq_code, hq_name, manager_em
 let downlineIds = [];
 let allDownlineEmployees = [];
 const app = document.getElementById("app");
-const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:1});
+const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
 const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
 
