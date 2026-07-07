@@ -83,6 +83,7 @@ const FY_MONTHS = [
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let session = null; // { emp_id, name, designation, hq_code, hq_name, manager_emp_id, is_admin }
 let downlineIds = [];
+let allDownlineEmployees = [];
 const app = document.getElementById("app");
 const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:1});
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
@@ -125,10 +126,13 @@ async function loadDownline(){
   const { data, error } = await sb.rpc('downline', { root: session.emp_id });
   downlineIds = (data || []).map(r => r.emp_id);
   if (downlineIds.length === 0) downlineIds = [session.emp_id];
+
+  const { data: emps } = await sb.from('employees').select('emp_id, name, designation, manager_emp_id').in('emp_id', downlineIds);
+  allDownlineEmployees = emps || [];
 }
 
 function logout(){
-  session = null; downlineIds = [];
+  session = null; downlineIds = []; allDownlineEmployees = [];
   renderLogin();
 }
 
@@ -175,12 +179,14 @@ if (currentYear < 2025 || currentYear > 2030) {
   currentMonth = getFiscalMonthNum(defaultDate);
 }
 let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd'
+let selectedEmpId = 'overall';
 let lastDashboardData = { kpis: [], brands: [], team: [] };
 
 async function renderDashboard(){
   const main = document.getElementById("main");
   main.innerHTML = `
     <div class="toolbar">
+      <select id="scopeSel" style="margin-right: 10px; display: ${session.designation === 'BE' ? 'none' : 'inline-block'}; max-width: 250px;"></select>
       <select id="viewTypeSel" style="margin-right: 10px;">
         <option value="monthly" ${currentView==='monthly'?'selected':''}>Monthly</option>
         <option value="bimonthly" ${currentView==='bimonthly'?'selected':''}>Bi-Monthly</option>
@@ -192,15 +198,43 @@ async function renderDashboard(){
         <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27</option>
         <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26</option>
       </select>
-      <span class="pill">${downlineIds.length} employee${downlineIds.length>1?'s':''} in scope</span>
+      <span class="pill" id="scopePill">${downlineIds.length} employee${downlineIds.length>1?'s':''} in scope</span>
       <button id="btnDownload" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Download Excel</button>
     </div>
     <div id="dashBody"><p class="muted">Loading…</p></div>
   `;
 
+  const scopeSel = document.getElementById("scopeSel");
   const viewSel = document.getElementById("viewTypeSel");
   const monthSel = document.getElementById("monthSel");
   const yearSel = document.getElementById("yearSel");
+
+  if (scopeSel && session.designation !== 'BE') {
+    const managers = allDownlineEmployees.filter(e => e.designation !== 'BE' && e.emp_id !== session.emp_id).sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
+    const bes = allDownlineEmployees.filter(e => e.designation === 'BE').sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
+    
+    let html = `<option value="overall" ${selectedEmpId==='overall'?'selected':''}>Overall Scope (${session.name || session.emp_id})</option>`;
+    
+    if (managers.length > 0) {
+      html += `<optgroup label="Managers">`;
+      managers.forEach(m => {
+        html += `<option value="${m.emp_id}" ${selectedEmpId===m.emp_id?'selected':''}>${m.name || m.emp_id} (${m.designation})</option>`;
+      });
+      html += `</optgroup>`;
+    }
+    if (bes.length > 0) {
+      html += `<optgroup label="Field Force (BE)">`;
+      bes.forEach(b => {
+        html += `<option value="${b.emp_id}" ${selectedEmpId===b.emp_id?'selected':''}>${b.name || b.emp_id} (BE - ${b.hq_code || ''})</option>`;
+      });
+      html += `</optgroup>`;
+    }
+    scopeSel.innerHTML = html;
+    scopeSel.onchange = () => {
+      selectedEmpId = scopeSel.value;
+      loadDashboardData();
+    };
+  }
 
   const updateSelectorStates = () => {
     if (currentView === 'mtd') {
@@ -268,6 +302,29 @@ async function loadDashboardData(){
   const body = document.getElementById("dashBody");
   body.innerHTML = `<p class="muted">Loading…</p>`;
 
+  let activeScopeIds = [];
+  if (selectedEmpId === 'overall') {
+    activeScopeIds = downlineIds;
+  } else {
+    const list = [selectedEmpId];
+    let added = true;
+    while (added) {
+      added = false;
+      allDownlineEmployees.forEach(e => {
+        if (e.manager_emp_id && list.includes(e.manager_emp_id) && !list.includes(e.emp_id)) {
+          list.push(e.emp_id);
+          added = true;
+        }
+      });
+    }
+    activeScopeIds = list;
+  }
+
+  const pill = document.getElementById("scopePill");
+  if (pill) {
+    pill.textContent = `${activeScopeIds.length} employee${activeScopeIds.length>1?'s':''} in scope`;
+  }
+
   let months = [];
   let periodLabel = "";
   if (currentView === 'bimonthly') {
@@ -293,7 +350,7 @@ async function loadDashboardData(){
     while (true) {
       const { data, error } = await sb.from(tableName)
         .select('*')
-        .in(filterCol, downlineIds)
+        .in(filterCol, activeScopeIds)
         .eq(yearCol, yVal)
         .in(monthCol, monthsVal)
         .order(orderCol)
@@ -425,8 +482,8 @@ async function loadDashboardData(){
   // team rollup (BE wise view for managers)
   let teamHtml = "";
   lastDashboardData.team = [];
-  if (session.designation !== 'BE') {
-    const { data: team } = await sb.from('employees').select('*').in('emp_id', downlineIds).eq('designation', 'BE');
+  if (session.designation !== 'BE' && activeScopeIds.length > 1) {
+    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
     const teamMap = {};
     (team||[]).forEach(e => teamMap[e.emp_id] = {
       emp: e,
