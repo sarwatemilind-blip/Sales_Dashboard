@@ -673,16 +673,16 @@ async function loadDashboardData(){
                 ${beBrandRows.map(r => {
                   const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
                   const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
-                  return \`<tr>
-                    <td>\${r.emp_name} <span class="muted">(\${r.emp_id})</span></td>
-                    <td>\${r.hq}</td>
-                    <td>\${r.brand}</td>
-                    <td><span class="pill" style="background:\${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:\${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">\${getBrandCategory(r.brand)}</span></td>
-                    <td class="num">\${fmtNum(r.targetVal)}</td>
-                    <td class="num">\${fmtNum(r.achVal)}</td>
-                    <td class="num">\${pct!==null?fmtPct(pct):'—'}</td>
-                    <td class="num \${g===null?'':(g>=0?'pos':'neg')}">\${g===null?'—':fmtPct(g)}</td>
-                  </tr>\`;
+                  return `<tr>
+                    <td>${r.emp_name} <span class="muted">(${r.emp_id})</span></td>
+                    <td>${r.hq}</td>
+                    <td>${r.brand}</td>
+                    <td><span class="pill" style="background:${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">${getBrandCategory(r.brand)}</span></td>
+                    <td class="num">${fmtNum(r.targetVal)}</td>
+                    <td class="num">${fmtNum(r.achVal)}</td>
+                    <td class="num">${pct!==null?fmtPct(pct):'—'}</td>
+                    <td class="num ${g===null?'':(g>=0?'pos':'neg')}">${g===null?'—':fmtPct(g)}</td>
+                  </tr>`;
                 }).join("")}
               </tbody>
             </table>
