@@ -504,9 +504,10 @@ async function loadDashboardData(){
 
         const key = `${r.emp_id}|${r.brand||'Unknown'}`;
         if (!beBrandMap[key]) {
-           beBrandMap[key] = { emp_id: r.emp_id, emp_name: entry.emp.name || r.emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+           beBrandMap[key] = { emp_id: r.emp_id, emp_name: entry.emp.name || r.emp_id, hq: entry.emp.hq_name || '', region: entry.emp.region || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 };
         }
         beBrandMap[key].targetVal += val;
+        beBrandMap[key].targetUnit += (parseFloat(r.unit_target_per_be)||0) * targetMultiplier;
       }
     });
 
@@ -520,9 +521,10 @@ async function loadDashboardData(){
         
         const key = `${r.be_emp_id}|${r.brand||'Unknown'}`;
         if (!beBrandMap[key]) {
-           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', region: entry.emp.region || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 };
         }
         beBrandMap[key].achVal += val;
+        beBrandMap[key].achUnit += parseFloat(r.quantity)||0;
       }
     });
 
@@ -536,7 +538,7 @@ async function loadDashboardData(){
 
         const key = `${r.be_emp_id}|${r.brand||'Unknown'}`;
         if (!beBrandMap[key]) {
-           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', region: entry.emp.region || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 };
         }
         beBrandMap[key].lastYearVal += val;
       }
@@ -553,11 +555,14 @@ async function loadDashboardData(){
         "BE Employee ID": r.emp_id,
         "BE Name": r.emp_name,
         "HQ": r.hq,
+        "Region": r.region,
         "Brand": r.brand,
         "Category": getBrandCategory(r.brand),
         "Target (Value)": r.targetVal,
         "Achievement (Value)": r.achVal,
         "% Achievement": pct !== null ? pct.toFixed(1) + "%" : "—",
+        "Target (Units)": r.targetUnit,
+        "Achievement (Units)": r.achUnit,
         "Growth YoY": g !== null ? g.toFixed(1) + "%" : "—"
       };
     });
@@ -661,11 +666,14 @@ async function loadDashboardData(){
                 <tr>
                   <th>BE Name</th>
                   <th>HQ</th>
+                  <th>Region</th>
                   <th>Brand</th>
                   <th>Category</th>
                   <th class="num">Target (Val)</th>
                   <th class="num">Achievement (Val)</th>
                   <th class="num">% Ach.</th>
+                  <th class="num">Target (Units)</th>
+                  <th class="num">Achievement (Units)</th>
                   <th class="num">Growth YoY</th>
                 </tr>
               </thead>
@@ -676,11 +684,14 @@ async function loadDashboardData(){
                   return `<tr>
                     <td>${r.emp_name} <span class="muted">(${r.emp_id})</span></td>
                     <td>${r.hq}</td>
+                    <td>${r.region}</td>
                     <td>${r.brand}</td>
                     <td><span class="pill" style="background:${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">${getBrandCategory(r.brand)}</span></td>
                     <td class="num">${fmtNum(r.targetVal)}</td>
                     <td class="num">${fmtNum(r.achVal)}</td>
                     <td class="num">${pct!==null?fmtPct(pct):'—'}</td>
+                    <td class="num">${fmtNum(r.targetUnit)}</td>
+                    <td class="num">${fmtNum(r.achUnit)}</td>
                     <td class="num ${g===null?'':(g>=0?'pos':'neg')}">${g===null?'—':fmtPct(g)}</td>
                   </tr>`;
                 }).join("")}
