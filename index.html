@@ -755,7 +755,8 @@ function renderAdmin(){
 function parseBillDate(val) {
   if (!val) return null;
   if (val instanceof Date && !isNaN(val.getTime())) {
-    return new Date(val.getFullYear(), val.getMonth(), val.getDate(), 12, 0, 0);
+    // SheetJS cellDates parses dates as UTC. Use UTC methods to avoid timezone shift.
+    return new Date(val.getUTCFullYear(), val.getUTCMonth(), val.getUTCDate(), 12, 0, 0);
   }
   const str = val.toString().trim();
   if (/^\d+(\.\d+)?$/.test(str)) {
