@@ -492,6 +492,8 @@ async function loadDashboardData(){
       total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
     });
 
+    const beBrandMap = {};
+
     tgt.forEach(r => {
       const entry = teamMap[r.emp_id];
       if (entry) {
@@ -499,6 +501,12 @@ async function loadDashboardData(){
         const val = (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
         entry[cat].targetVal += val;
         entry.total.targetVal += val;
+
+        const key = `${r.emp_id}|${r.brand||'Unknown'}`;
+        if (!beBrandMap[key]) {
+           beBrandMap[key] = { emp_id: r.emp_id, emp_name: entry.emp.name || r.emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+        }
+        beBrandMap[key].targetVal += val;
       }
     });
 
@@ -509,6 +517,12 @@ async function loadDashboardData(){
         const val = parseFloat(r.amount)||0;
         entry[cat].achVal += val;
         entry.total.achVal += val;
+        
+        const key = `${r.be_emp_id}|${r.brand||'Unknown'}`;
+        if (!beBrandMap[key]) {
+           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+        }
+        beBrandMap[key].achVal += val;
       }
     });
 
@@ -519,8 +533,35 @@ async function loadDashboardData(){
         const val = parseFloat(r.amount)||0;
         entry[cat].lastYearVal += val;
         entry.total.lastYearVal += val;
+
+        const key = `${r.be_emp_id}|${r.brand||'Unknown'}`;
+        if (!beBrandMap[key]) {
+           beBrandMap[key] = { emp_id: r.be_emp_id, emp_name: entry.emp.name || r.be_emp_id, hq: entry.emp.hq_name || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0 };
+        }
+        beBrandMap[key].lastYearVal += val;
       }
     });
+
+    const beBrandRows = Object.values(beBrandMap)
+        .filter(r => r.targetVal > 0 || r.achVal > 0 || r.lastYearVal > 0)
+        .sort((a,b) => a.emp_name.localeCompare(b.emp_name) || b.targetVal - a.targetVal);
+    
+    lastDashboardData.beBrands = beBrandRows.map(r => {
+      const pct = r.targetVal > 0 ? (r.achVal / r.targetVal * 100) : null;
+      const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal) / r.lastYearVal * 100) : null;
+      return {
+        "BE Employee ID": r.emp_id,
+        "BE Name": r.emp_name,
+        "HQ": r.hq,
+        "Brand": r.brand,
+        "Category": getBrandCategory(r.brand),
+        "Target (Value)": r.targetVal,
+        "Achievement (Value)": r.achVal,
+        "% Achievement": pct !== null ? pct.toFixed(1) + "%" : "—",
+        "Growth YoY": g !== null ? g.toFixed(1) + "%" : "—"
+      };
+    });
+
 
     const teamRows = Object.values(teamMap).filter(t => t.total.targetVal > 0 || t.total.achVal > 0)
       .sort((a,b) => b.total.targetVal - a.total.targetVal);
@@ -610,7 +651,43 @@ async function loadDashboardData(){
               }).join("")}
             </tbody>
           </table>
-        </div>`;
+        </div>
+        
+        <details style="margin-bottom: 24px;">
+          <summary style="cursor: pointer; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(15,23,42,.06); font-weight: 600; color: var(--primary);">View Full Team (BE-wise Brand-wise Detail)</summary>
+          <div style="overflow-x: auto; margin-top: 10px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.06);">
+            <table style="width: 100%;">
+              <thead>
+                <tr>
+                  <th>BE Name</th>
+                  <th>HQ</th>
+                  <th>Brand</th>
+                  <th>Category</th>
+                  <th class="num">Target (Val)</th>
+                  <th class="num">Achievement (Val)</th>
+                  <th class="num">% Ach.</th>
+                  <th class="num">Growth YoY</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${beBrandRows.map(r => {
+                  const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
+                  const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
+                  return \`<tr>
+                    <td>\${r.emp_name} <span class="muted">(\${r.emp_id})</span></td>
+                    <td>\${r.hq}</td>
+                    <td>\${r.brand}</td>
+                    <td><span class="pill" style="background:\${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:\${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">\${getBrandCategory(r.brand)}</span></td>
+                    <td class="num">\${fmtNum(r.targetVal)}</td>
+                    <td class="num">\${fmtNum(r.achVal)}</td>
+                    <td class="num">\${pct!==null?fmtPct(pct):'—'}</td>
+                    <td class="num \${g===null?'':(g>=0?'pos':'neg')}">\${g===null?'—':fmtPct(g)}</td>
+                  </tr>\`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        </details>`;
     }
   }
 
@@ -734,6 +811,11 @@ function downloadDashboardDataExcel() {
     if (lastDashboardData.team && lastDashboardData.team.length > 0) {
       const ws3 = XLSX.utils.json_to_sheet(lastDashboardData.team);
       XLSX.utils.book_append_sheet(wb, ws3, "BE Performance");
+    }
+    
+    if (lastDashboardData.beBrands && lastDashboardData.beBrands.length > 0) {
+      const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrands);
+      XLSX.utils.book_append_sheet(wb, ws4, "BE x Brand Detail");
     }
     
     let label = "";
