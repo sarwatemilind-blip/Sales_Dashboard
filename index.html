@@ -901,9 +901,18 @@ function renderAdmin(){
       <div class="progress"><div id="empProgBar"></div></div>
       <div id="empUpStatus" class="small"></div>
     </div>
+
+    <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Upload Stockist Mapping</div>
+      <p class="small">Upload the <b>stockist_mapping.csv</b> file to replace the stockist-employee relationship data. Columns required: <b>distributor_code, distributor_name, distributor_city, stockist_code, stockist_name, hq_code, hq_name, area, region, zone, be_emp_id_1, be_emp_id_2, be_emp_id_3, asm_emp_id, rsm_emp_id, zm_emp_id, vp_emp_id</b>.</p>
+      <input type="file" id="smFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
+      <div class="progress"><div id="smProgBar"></div></div>
+      <div id="smUpStatus" class="small"></div>
+    </div>
   `;
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
+  document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
 }
 
@@ -1232,6 +1241,82 @@ async function handleEmployeeUpload(e){
   }
 
   status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${rows.length} employee records and set default passwords.`;
+}
+
+// ---------------- STOCKIST MAPPING UPLOAD ----------------
+async function handleStockistMappingUpload(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("smUpStatus");
+  const progBar = document.getElementById("smProgBar");
+
+  status.textContent = "Reading file…";
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws);
+
+  if (rows.length === 0) {
+    status.textContent = "The file is empty.";
+    return;
+  }
+
+  // Validate columns
+  const firstRow = rows[0];
+  const required = ['distributor_code', 'distributor_name', 'distributor_city', 'stockist_code', 'stockist_name', 'hq_code', 'hq_name'];
+  const missing = required.filter(col => !(col in firstRow));
+  if (missing.length > 0) {
+    status.textContent = `Error: Missing columns: ${missing.join(", ")}`;
+    return;
+  }
+
+  if (!confirm(`This will replace ALL stockist mapping records with ${rows.length} new rows. Continue?`)) {
+    status.textContent = "Upload cancelled.";
+    return;
+  }
+
+  status.textContent = "Clearing existing stockist mapping records…";
+  const { error: delError } = await sb.from('stockist_mapping').delete().neq('stockist_code', '___IMPOSSIBLE___');
+  if (delError) {
+    status.textContent = "Failed to clear existing stockist mapping: " + delError.message;
+    return;
+  }
+
+  status.textContent = `Uploading ${rows.length} stockist mapping records…`;
+  const batchSize = 100;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize).map(r => ({
+      distributor_code: (r.distributor_code || '').toString().trim(),
+      distributor_name: (r.distributor_name || '').toString().trim(),
+      distributor_city: (r.distributor_city || '').toString().trim(),
+      stockist_code: (r.stockist_code || '').toString().trim(),
+      stockist_name: (r.stockist_name || '').toString().trim(),
+      hq_code: (r.hq_code || '').toString().trim(),
+      hq_name: (r.hq_name || '').toString().trim(),
+      area: (r.area || '').toString().trim(),
+      region: (r.region || '').toString().trim(),
+      zone: (r.zone || '').toString().trim(),
+      be_emp_id_1: (r.be_emp_id_1 || '').toString().trim() || null,
+      be_emp_id_2: (r.be_emp_id_2 || '').toString().trim() || null,
+      be_emp_id_3: (r.be_emp_id_3 || '').toString().trim() || null,
+      asm_emp_id: (r.asm_emp_id || '').toString().trim() || null,
+      rsm_emp_id: (r.rsm_emp_id || '').toString().trim() || null,
+      zm_emp_id: (r.zm_emp_id || '').toString().trim() || null,
+      vp_emp_id: (r.vp_emp_id || '').toString().trim() || null
+    })).filter(r => r.stockist_code);
+
+    if (batch.length > 0) {
+      const { error: insError } = await sb.from('stockist_mapping').insert(batch);
+      if (insError) {
+        status.textContent = "Failed to insert batch: " + insError.message;
+        return;
+      }
+    }
+
+    progBar.style.width = Math.round(((i + batch.length) / rows.length) * 100) + "%";
+  }
+
+  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${rows.length} stockist mapping records.`;
 }
 
 // ---------------- INIT ----------------
