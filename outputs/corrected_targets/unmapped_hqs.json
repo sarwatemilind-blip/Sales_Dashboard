@@ -1,0 +1,38 @@
+[
+  {
+    "hq_code": "S0066",
+    "hq_name": "DHENKANAL",
+    "state": "Orissa",
+    "region": "BBSR",
+    "emp_ids": "ADORBE3",
+    "emp_names": "MANAS RANJAN MISHRA",
+    "note": "No source target rows exist in the HQ wise target workbook for this HQ."
+  },
+  {
+    "hq_code": "S0244",
+    "hq_name": "KENDRAPADA",
+    "state": "Orissa",
+    "region": "BBSR",
+    "emp_ids": "ADORBE4",
+    "emp_names": "MIRZA EZAZUDDIN BAIG",
+    "note": "No source target rows exist in the HQ wise target workbook for this HQ."
+  },
+  {
+    "hq_code": "S0319",
+    "hq_name": "KEONJHAR",
+    "state": "Orissa",
+    "region": "BBSR",
+    "emp_ids": "ADORBE5",
+    "emp_names": "NISHI KANTA SAHOO",
+    "note": "No source target rows exist in the HQ wise target workbook for this HQ."
+  },
+  {
+    "hq_code": "S0382",
+    "hq_name": "PURI",
+    "state": "Orissa",
+    "region": "BBSR",
+    "emp_ids": "ADORBE2",
+    "emp_names": "K KUMAR RAO",
+    "note": "No source target rows exist in the HQ wise target workbook for this HQ."
+  }
+]

@@ -202,6 +202,14 @@ create policy "read all clubbing" on product_clubbing for select using (true);
 -- key on a tiny server function, OR via the anon key if you accept the lower
 -- security bar for this internal tool. See README for the recommended option.
 create policy "insert sales (internal tool)" on sales for insert with check (true);
+create policy "delete sales (internal tool)" on sales for delete using (true);
+create policy "insert employees (internal tool)" on employees for insert with check (true);
+create policy "update employees (internal tool)" on employees for update using (true) with check (true);
+create policy "delete employees (internal tool)" on employees for delete using (true);
+create policy "insert targets (internal tool)" on targets for insert with check (true);
+create policy "delete targets (internal tool)" on targets for delete using (true);
+create policy "insert stockist mapping (internal tool)" on stockist_mapping for insert with check (true);
+create policy "delete stockist mapping (internal tool)" on stockist_mapping for delete using (true);
 
 -- =============================================================
 -- UPLOAD MANAGEMENT HELPERS
@@ -242,4 +250,3 @@ begin
   where to_char(uploaded_at, 'YYYY-MM-DD HH24:MI') = p_upload_group_id;
 end;
 $$;
-

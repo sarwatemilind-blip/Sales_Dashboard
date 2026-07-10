@@ -31,7 +31,7 @@ Every employee's password is now their own Employee ID. Tell your field force to
 ```sql
 update employees set is_admin = true where emp_id = 'ADLA02'; -- your emp id
 ```
-Admins see an "Admin Upload" tab to push daily/monthly sales files straight from the browser.
+Admins see an "Admin Upload" tab to push daily/monthly sales files, employee corrections, target refreshes, and stockist mapping updates straight from the browser.
 
 ## Step 6 — Configure the app
 Open `app.html` in a text editor and fill in your project's URL and anon/public key near the top:

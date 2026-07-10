@@ -138,6 +138,11 @@ function logout(){
 
 // ---------------- SHELL ----------------
 function renderShell(tab){
+  const canAdmin = !!(
+    session.is_admin ||
+    session.emp_id === 'ADLA02' ||
+    String(session.designation || '').trim().toUpperCase() === 'ADMIN'
+  );
   app.innerHTML = `
     <header>
       <div>
@@ -146,18 +151,19 @@ function renderShell(tab){
       </div>
       <nav>
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
-        ${session.is_admin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
+        ${canAdmin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
         <button id="navLogout">Logout</button>
       </nav>
     </header>
     <main id="main"></main>
   `;
   document.getElementById("navDash").onclick = () => renderShell('dashboard');
-  if (session.is_admin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
+  if (canAdmin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
   document.getElementById("navLogout").onclick = logout;
 
   if (tab === 'dashboard') renderDashboard();
-  else if (tab === 'admin') renderAdmin();
+  else if (tab === 'admin' && canAdmin) renderAdmin();
+  else if (tab === 'admin') renderDashboard();
 }
 
 // ---------------- DASHBOARD ----------------
@@ -903,6 +909,14 @@ function renderAdmin(){
     </div>
 
     <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Upload Targets</div>
+      <p class="small">Upload the <b>targets.csv</b> or matching Excel file to replace the target master after employee corrections. Required columns: <b>emp_id, hq_code, hq_name, brand, product_code, state, region, no_of_be, month_num, month_name, year, val_target_total, unit_target_total, val_target_per_be, unit_target_per_be</b>.</p>
+      <input type="file" id="targetFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
+      <div class="progress"><div id="targetProgBar"></div></div>
+      <div id="targetUpStatus" class="small"></div>
+    </div>
+
+    <div class="upload-box" style="margin-top:20px;">
       <div class="section-title" style="margin-top:0;">Upload Stockist Mapping</div>
       <p class="small">Upload the <b>stockist_mapping.csv</b> file to replace the stockist-employee relationship data. Columns required: <b>distributor_code, distributor_name, distributor_city, stockist_code, stockist_name, hq_code, hq_name, area, region, zone, be_emp_id_1, be_emp_id_2, be_emp_id_3, asm_emp_id, rsm_emp_id, zm_emp_id, vp_emp_id</b>.</p>
       <input type="file" id="smFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
@@ -912,6 +926,7 @@ function renderAdmin(){
   `;
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
+  document.getElementById("targetFileInput").onchange = handleTargetUpload;
   document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
 }
@@ -1271,6 +1286,95 @@ async function handleEmployeeUpload(e){
   }
 
   status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${rows.length} employee records and set default passwords.`;
+}
+
+// ---------------- TARGET UPLOAD ----------------
+async function handleTargetUpload(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("targetUpStatus");
+  const progBar = document.getElementById("targetProgBar");
+
+  status.textContent = "Reading file...";
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws);
+
+  if (rows.length === 0) {
+    status.textContent = "The file is empty.";
+    return;
+  }
+
+  const normalizeKey = k => k.toString().toLowerCase().trim().replace(/\s+/g,'_');
+  const keyMap = {};
+  Object.keys(rows[0]).forEach(k => { keyMap[normalizeKey(k)] = k; });
+
+  const get = (row, col) => {
+    const orig = keyMap[col];
+    return orig !== undefined ? (row[orig] ?? '') : '';
+  };
+
+  const required = [
+    'emp_id', 'hq_code', 'hq_name', 'brand', 'product_code', 'state',
+    'region', 'no_of_be', 'month_num', 'month_name', 'year',
+    'val_target_total', 'unit_target_total', 'val_target_per_be', 'unit_target_per_be'
+  ];
+  const missing = required.filter(col => !keyMap[col]);
+  if (missing.length > 0) {
+    status.textContent = `Error: Missing columns: ${missing.join(", ")}`;
+    return;
+  }
+
+  if (!confirm(`This will replace ALL existing targets with ${rows.length} new rows. Continue?`)) {
+    status.textContent = "Upload cancelled.";
+    return;
+  }
+
+  status.textContent = "Clearing old target records...";
+  const { error: delError } = await sb.from('targets').delete().gte('id', 1);
+  if (delError) {
+    status.textContent = "Failed to clear existing targets: " + delError.message;
+    return;
+  }
+
+  const batchSize = 250;
+  let inserted = 0;
+  status.textContent = `Uploading ${rows.length} target rows...`;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize).map(r => ({
+      emp_id: get(r, 'emp_id').toString().trim(),
+      hq_code: get(r, 'hq_code').toString().trim(),
+      hq_name: get(r, 'hq_name').toString().trim(),
+      brand: get(r, 'brand').toString().trim(),
+      product_code: get(r, 'product_code').toString().trim(),
+      state: get(r, 'state').toString().trim(),
+      region: get(r, 'region').toString().trim(),
+      no_of_be: parseFloat(get(r, 'no_of_be')) || 0,
+      month_num: parseInt(get(r, 'month_num')) || null,
+      month_name: get(r, 'month_name').toString().trim(),
+      year: parseInt(get(r, 'year')) || null,
+      val_target_total: parseFloat(get(r, 'val_target_total')) || 0,
+      unit_target_total: parseFloat(get(r, 'unit_target_total')) || 0,
+      val_target_per_be: parseFloat(get(r, 'val_target_per_be')) || 0,
+      unit_target_per_be: parseFloat(get(r, 'unit_target_per_be')) || 0
+    })).filter(r => r.emp_id && r.hq_code && r.month_num && r.year);
+
+    if (batch.length > 0) {
+      const { error } = await sb.from('targets').insert(batch);
+      if (error) {
+        status.textContent = `Failed at row ${i + 1}: ${error.message}`;
+        console.error('Target upload error:', error);
+        return;
+      }
+      inserted += batch.length;
+    }
+
+    progBar.style.width = Math.round((Math.min(i + batchSize, rows.length) / rows.length) * 100) + "%";
+    status.textContent = `Uploaded ${Math.min(i + batchSize, rows.length)} of ${rows.length} target rows...`;
+  }
+
+  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${inserted} target rows.`;
 }
 
 // ---------------- STOCKIST MAPPING UPLOAD ----------------

@@ -1,0 +1,15 @@
+{
+  "source_rows": 2616,
+  "generated_source_rows": 2616,
+  "output_rows": 34848,
+  "unique_output_emp_ids": 114,
+  "vacancy_source_rows": 432,
+  "manager_allocations": 5184,
+  "unmapped_hq_count": 4,
+  "hq_count_mismatches": {
+    "S0262": {
+      "source_no_of_be": 1,
+      "effective_slots": 2
+    }
+  }
+}
