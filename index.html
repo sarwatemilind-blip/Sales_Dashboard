@@ -1163,6 +1163,24 @@ async function loadStockStatementData(){
   visibleStockists.forEach(row => {
     visibleStockistMap.set(normalizeEmpId(row.stockist_code), row);
   });
+  const { data: clubRows, error: clubErr } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
+  if (clubErr) {
+    body.innerHTML = `<div class="err">Failed to load product catalog: ${clubErr.message}</div>`;
+    return;
+  }
+  const productMap = new Map();
+  (clubRows || []).forEach(r => {
+    const productName = (r.canonical_brand || r.raw_product_code || '').toString().trim();
+    const productCode = (r.canonical_product_code || r.raw_product_code || productName || '').toString().trim();
+    const key = normalizeEmpId(productName || productCode);
+    if (!key || productMap.has(key)) return;
+    productMap.set(key, {
+      product_code: productCode,
+      product_name: productName,
+      brand: productName
+    });
+  });
+  const productCatalog = [...productMap.values()].sort((a, b) => a.product_name.localeCompare(b.product_name));
   async function fetchAllSalesForMonth(year, month) {
     let allSales = [];
     let from = 0;
@@ -1244,58 +1262,54 @@ async function loadStockStatementData(){
     item.sale_rate = item.primary_units > 0 ? (item.primary_value / item.primary_units) : item.sale_rate;
   });
 
-  const rowKeys = new Set([...salesMap.keys(), ...currentSavedMap.keys()]);
-  const rows = [...rowKeys].map(key => {
-    const sales = salesMap.get(key) || null;
-    const saved = currentSavedMap.get(key) || null;
-    const prevSaved = prevSavedMap.get(key) || null;
-    const stockistCode = sales?.stockist_code || saved?.stockist_code || '';
-    const stockistRow = visibleStockistMap.get(normalizeEmpId(stockistCode)) || {};
-    const productCode = sales?.product_code || saved?.product_code || key.split('|')[1] || '';
-    const productName = sales?.product_name || saved?.product_name || productCode;
-    const brand = sales?.brand || saved?.brand || '';
-    const isInitialMonth = targetYear === 2026 && targetMonth === 3;
-    const openingUnits = prevSaved && prevSaved.closing_units != null
-      ? (parseFloat(prevSaved.closing_units) || 0)
-      : (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : (isInitialMonth ? (parseFloat(saved?.opening_units) || 0) : 0));
-    const primaryUnits = sales ? sales.primary_units : (parseFloat(saved?.primary_units) || 0);
-    const primaryValue = sales ? sales.primary_value : (parseFloat(saved?.primary_value) || 0);
-    const saleRate = primaryUnits > 0 ? (primaryValue / primaryUnits) : (parseFloat(saved?.sale_rate) || 0);
-    const totalUnits = openingUnits + primaryUnits;
-    const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
-    const secondaryValue = secondaryUnits * saleRate;
-    const closingUnits = totalUnits - secondaryUnits;
-    const closingValue = closingUnits * saleRate;
-    const openingEditable = isInitialMonth && !prevSaved;
-    const openingDisplay = openingEditable && !saved && !prevSaved ? '' : openingUnits;
-    return {
-      stockist_code: stockistCode,
-      stockist_name: (stockistRow.stockist_name || sales?.stockist_name || saved?.stockist_name || stockistCode || '').toString().trim(),
-      product_code: productCode,
-      product_name: productName,
-      brand,
-      openingUnits,
-      primaryUnits,
-      primaryValue,
-      saleRate,
-      totalUnits,
-      secondaryUnits,
-      secondaryValue,
-      closingUnits,
-      closingValue,
-      openingEditable,
-      openingDisplay,
-      saved: !!saved,
-      key
-    };
-  }).sort((a, b) => a.stockist_name.localeCompare(b.stockist_name) || a.product_name.localeCompare(b.product_name));
+  const stockistCatalog = [...visibleStockistMap.values()].sort((a, b) => (a.stockist_name || a.stockist_code || '').localeCompare(b.stockist_name || b.stockist_code || ''));
+  const isInitialMonth = targetYear === 2026 && targetMonth === 3;
+  const groups = stockistCatalog.map(stockistRow => {
+    const stockistCode = normalizeEmpId(stockistRow.stockist_code);
+    const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
+    const rows = productCatalog.map(product => {
+      const key = `${stockistCode}|${normalizeEmpId(product.product_code)}`;
+      const sales = salesMap.get(key) || null;
+      const saved = currentSavedMap.get(key) || null;
+      const prevSaved = prevSavedMap.get(key) || null;
+      const openingUnits = prevSaved && prevSaved.closing_units != null
+        ? (parseFloat(prevSaved.closing_units) || 0)
+        : (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : 0);
+      const primaryUnits = sales ? sales.primary_units : 0;
+      const primaryValue = sales ? sales.primary_value : 0;
+      const saleRate = primaryUnits > 0 ? (primaryValue / primaryUnits) : 0;
+      const totalUnits = openingUnits + primaryUnits;
+      const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
+      const secondaryValue = secondaryUnits * saleRate;
+      const closingUnits = totalUnits - secondaryUnits;
+      const closingValue = closingUnits * saleRate;
+      const openingEditable = isInitialMonth && !prevSaved;
+      const openingDisplay = openingEditable && !saved && !prevSaved ? '' : openingUnits;
+      return {
+        stockist_code: stockistCode,
+        stockist_name: (sales?.stockist_name || saved?.stockist_name || stockistName || '').toString().trim(),
+        product_code: product.product_code,
+        product_name: product.product_name,
+        brand: product.brand,
+        openingUnits,
+        primaryUnits,
+        primaryValue,
+        saleRate,
+        totalUnits,
+        secondaryUnits,
+        secondaryValue,
+        closingUnits,
+        closingValue,
+        openingEditable,
+        openingDisplay,
+        saved: !!saved,
+        key
+      };
+    }).sort((a, b) => a.product_name.localeCompare(b.product_name));
+    return { stockist_code: stockistCode, stockist_name: stockistName, rows };
+  });
 
-  const groups = [];
-  for (const row of rows) {
-    const last = groups[groups.length - 1];
-    if (!last || last.stockist_code !== row.stockist_code) groups.push({ stockist_code: row.stockist_code, stockist_name: row.stockist_name, rows: [row] });
-    else last.rows.push(row);
-  }
+  const rows = groups.flatMap(g => g.rows);
 
   const grandTotals = rows.reduce((acc, row) => {
     acc.openingUnits += row.openingUnits || 0;
@@ -1362,7 +1376,6 @@ async function loadStockStatementData(){
               acc.closingValue += row.closingValue || 0;
               return acc;
             }, { openingUnits: 0, primaryUnits: 0, primaryValue: 0, secondaryUnits: 0, secondaryValue: 0, closingUnits: 0, closingValue: 0 });
-            const groupSaleRate = groupTotals.primaryUnits > 0 ? groupTotals.primaryValue / groupTotals.primaryUnits : 0;
             return `${group.rows.map(row => {
               const rowKey = statementDomKey(row.stockist_code, row.product_code);
               return `<tr>
@@ -1387,7 +1400,10 @@ async function loadStockStatementData(){
                 <td class="num">${fmtCurrency(row.secondaryValue)}</td>
                 <td class="num">${fmtNum(row.closingUnits)}</td>
                 <td class="num">${fmtCurrency(row.closingValue)}</td>
-                <td><button class="btn-primary" id="stockSave_${rowKey}" type="button" style="width:auto; padding:8px 12px;">Save</button></td>
+                <td style="white-space:nowrap;">
+                  <button class="btn-primary" id="stockSave_${rowKey}" type="button" style="width:auto; padding:8px 12px; margin-right:6px;">Save</button>
+                  <button class="btn-ghost" id="stockDelete_${rowKey}" type="button" style="width:auto; padding:8px 12px; color:var(--bad); border-color:var(--bad);">Delete</button>
+                </td>
               </tr>`;
             }).join('')}
             <tr class="stock-total-row">
@@ -1396,8 +1412,8 @@ async function loadStockStatementData(){
               <td class="num">${fmtNum(groupTotals.openingUnits)}</td>
               <td class="num">${fmtNum(groupTotals.primaryUnits)}</td>
               <td class="num">${fmtCurrency(groupTotals.primaryValue)}</td>
-              <td class="num">${groupSaleRate ? fmtCurrency(groupSaleRate) : '₹0'}</td>
-              <td class="num">${fmtNum(groupTotals.openingUnits + groupTotals.primaryUnits)}</td>
+              <td class="num"></td>
+              <td class="num"></td>
               <td class="num">${fmtNum(groupTotals.secondaryUnits)}</td>
               <td class="num">${fmtCurrency(groupTotals.secondaryValue)}</td>
               <td class="num">${fmtNum(groupTotals.closingUnits)}</td>
@@ -1411,8 +1427,8 @@ async function loadStockStatementData(){
             <td class="num">${fmtNum(grandTotals.openingUnits)}</td>
             <td class="num">${fmtNum(grandTotals.primaryUnits)}</td>
             <td class="num">${fmtCurrency(grandTotals.primaryValue)}</td>
-            <td class="num">${grandSaleRate ? fmtCurrency(grandSaleRate) : '₹0'}</td>
-            <td class="num">${fmtNum(grandTotals.openingUnits + grandTotals.primaryUnits)}</td>
+            <td class="num"></td>
+            <td class="num"></td>
             <td class="num">${fmtNum(grandTotals.secondaryUnits)}</td>
             <td class="num">${fmtCurrency(grandTotals.secondaryValue)}</td>
             <td class="num">${fmtNum(grandTotals.closingUnits)}</td>
@@ -1422,51 +1438,70 @@ async function loadStockStatementData(){
         </tbody>
       </table>
     </div>
-    <div class="stock-note">Opening is editable only for the first statement month. Every later month carries the previous closing forward automatically. Totals are shown in rupees in the value columns.</div>
+    <div class="stock-note">Opening is editable only for the first statement month. Every later month carries the previous closing forward automatically. Use Save to update a row or Delete to clear it before final submission. Totals are shown in rupees in the value columns.</div>
   `;
 
   groups.forEach(group => {
     group.rows.forEach(row => {
       const rowKey = statementDomKey(row.stockist_code, row.product_code);
       const btn = document.getElementById(`stockSave_${rowKey}`);
-      if (!btn) return;
-      btn.onclick = async () => {
-        const openingInput = document.getElementById(`stockOpening_${rowKey}`);
-        const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
-        const openingUnits = row.openingEditable ? parseFloat(openingInput.value) : row.openingUnits;
-        const secondaryUnits = parseFloat(secondaryInput.value);
-        if (row.openingEditable && !Number.isFinite(openingUnits)) {
-          alert("Please enter the opening stock units for the first statement month.");
-          return;
-        }
-        const payload = {
-          scope_emp_id: scopeKey,
-          period_year: targetYear,
-          period_month: targetMonth,
-          stockist_code: row.stockist_code,
-          stockist_name: row.stockist_name,
-          product_code: row.product_code,
-          product_name: row.product_name,
-          brand: row.brand,
-          opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
-          primary_units: row.primaryUnits,
-          primary_value: row.primaryValue,
-          sale_rate: row.saleRate,
-          total_units: row.totalUnits,
-          secondary_units: Number.isFinite(secondaryUnits) ? secondaryUnits : 0,
-          secondary_value: (Number.isFinite(secondaryUnits) ? secondaryUnits : 0) * row.saleRate,
-          closing_units: row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0),
-          closing_value: (row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0)) * row.saleRate,
-          updated_by: session.emp_id,
-          updated_at: new Date().toISOString()
+      const delBtn = document.getElementById(`stockDelete_${rowKey}`);
+      if (btn) {
+        btn.onclick = async () => {
+          const openingInput = document.getElementById(`stockOpening_${rowKey}`);
+          const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
+          const openingUnits = row.openingEditable ? parseFloat(openingInput.value) : row.openingUnits;
+          const secondaryUnits = parseFloat(secondaryInput.value);
+          if (row.openingEditable && !Number.isFinite(openingUnits)) {
+            alert("Please enter the opening stock units for the first statement month.");
+            return;
+          }
+          const payload = {
+            scope_emp_id: scopeKey,
+            period_year: targetYear,
+            period_month: targetMonth,
+            stockist_code: row.stockist_code,
+            stockist_name: row.stockist_name,
+            product_code: row.product_code,
+            product_name: row.product_name,
+            brand: row.brand,
+            opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
+            primary_units: row.primaryUnits,
+            primary_value: row.primaryValue,
+            sale_rate: row.saleRate,
+            total_units: row.totalUnits,
+            secondary_units: Number.isFinite(secondaryUnits) ? secondaryUnits : 0,
+            secondary_value: (Number.isFinite(secondaryUnits) ? secondaryUnits : 0) * row.saleRate,
+            closing_units: row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0),
+            closing_value: (row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0)) * row.saleRate,
+            updated_by: session.emp_id,
+            updated_at: new Date().toISOString()
+          };
+          const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+          if (error) {
+            alert("Failed to save statement: " + error.message);
+            return;
+          }
+          await loadStockStatementData();
         };
-        const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-        if (error) {
-          alert("Failed to save statement: " + error.message);
-          return;
-        }
-        await loadStockStatementData();
-      };
+      }
+      if (delBtn) {
+        delBtn.onclick = async () => {
+          if (!confirm(`Delete the saved statement row for ${row.stockist_name} - ${row.product_name}?`)) return;
+          const { error } = await sb.from('stock_statement_items')
+            .delete()
+            .eq('scope_emp_id', scopeKey)
+            .eq('period_year', targetYear)
+            .eq('period_month', targetMonth)
+            .eq('stockist_code', row.stockist_code)
+            .eq('product_code', row.product_code);
+          if (error) {
+            alert("Failed to delete statement row: " + error.message);
+            return;
+          }
+          await loadStockStatementData();
+        };
+      }
     });
   });
 }
