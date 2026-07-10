@@ -1236,10 +1236,12 @@ async function loadStockStatementData(){
   const prevSavedMap = new Map(prevSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
 
   const salesMap = new Map();
+  const productRateMap = new Map();
   currentSales.forEach(r => {
     const stockistCode = normalizeEmpId(r.stockist_code);
     const productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
     const key = `${stockistCode}|${productCode}`;
+    const productKey = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
     const mappingRow = visibleStockistMap.get(stockistCode) || {};
     const productName = (r.raw_product_name || r.brand || r.canonical_product_code || r.raw_product_code || productCode || '').toString().trim();
     if (!salesMap.has(key)) {
@@ -1260,6 +1262,14 @@ async function loadStockStatementData(){
     item.product_name = productName || item.product_name;
     item.brand = (r.brand || item.brand || productName || '').toString().trim();
     item.sale_rate = item.primary_units > 0 ? (item.primary_value / item.primary_units) : item.sale_rate;
+
+    if (productKey) {
+      const stats = productRateMap.get(productKey) || { units: 0, value: 0, rate: 0 };
+      stats.units += parseFloat(r.quantity) || 0;
+      stats.value += parseFloat(r.amount) || 0;
+      stats.rate = stats.units > 0 ? (stats.value / stats.units) : stats.rate;
+      productRateMap.set(productKey, stats);
+    }
   });
 
   const stockistCatalog = [...visibleStockistMap.values()].sort((a, b) => (a.stockist_name || a.stockist_code || '').localeCompare(b.stockist_name || b.stockist_code || ''));
@@ -1277,7 +1287,14 @@ async function loadStockStatementData(){
         : (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : 0);
       const primaryUnits = sales ? sales.primary_units : 0;
       const primaryValue = sales ? sales.primary_value : 0;
-      const saleRate = primaryUnits > 0 ? (primaryValue / primaryUnits) : 0;
+      const productRate = productRateMap.get(normalizeEmpId(product.product_code)) || null;
+      const saleRate = primaryUnits > 0
+        ? (primaryValue / primaryUnits)
+        : (
+          productRate?.rate
+          || (saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0)
+          || (prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0)
+        );
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
       const secondaryValue = secondaryUnits * saleRate;
