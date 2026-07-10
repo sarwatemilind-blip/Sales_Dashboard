@@ -328,13 +328,11 @@ let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd'
 let selectedEmpId = 'overall';
 let lastDashboardData = { kpis: [], brands: [], team: [] };
 let lastStockStatementData = { rows: [], scopeEmpId: 'overall', year: currentYear, month: currentMonth, grandTotals: null };
-let stockStatementBackendAvailable = true;
 
 const prevFiscalPeriod = (year, month) => month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
 const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${stockistCode}||${productCode}`);
-const stockStatementDraftKey = (scopeKey, year, month) => `stock_statement_draft::${scopeKey}::${year}::${String(month).padStart(2, '0')}`;
 
 function getActiveScopeIdsForSelection() {
   if (selectedEmpId === 'overall') return [...downlineIds];
@@ -1193,31 +1191,29 @@ async function loadStockStatementData(){
     return;
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
-  let currentSavedRows = [];
-  let prevSavedRows = [];
-  stockStatementBackendAvailable = true;
-  try {
-    const [currentSavedResp, prevSavedResp] = await Promise.all([
-      sb.from('stock_statement_items')
-        .select('*')
-        .eq('scope_emp_id', scopeKey)
-        .eq('period_year', targetYear)
-        .eq('period_month', targetMonth),
-      sb.from('stock_statement_items')
-        .select('*')
-        .eq('scope_emp_id', scopeKey)
-        .eq('period_year', prevPeriod.year)
-        .eq('period_month', prevPeriod.month)
-    ]);
-    if (currentSavedResp.error) throw currentSavedResp.error;
-    if (prevSavedResp.error) throw prevSavedResp.error;
-    currentSavedRows = currentSavedResp.data || [];
-    prevSavedRows = prevSavedResp.data || [];
-  } catch (error) {
-    stockStatementBackendAvailable = false;
-    currentSavedRows = JSON.parse(localStorage.getItem(stockStatementDraftKey(scopeKey, targetYear, targetMonth)) || '[]');
-    prevSavedRows = JSON.parse(localStorage.getItem(stockStatementDraftKey(scopeKey, prevPeriod.year, prevPeriod.month)) || '[]');
+  const [currentSavedResp, prevSavedResp] = await Promise.all([
+    sb.from('stock_statement_items')
+      .select('*')
+      .eq('scope_emp_id', scopeKey)
+      .eq('period_year', targetYear)
+      .eq('period_month', targetMonth),
+    sb.from('stock_statement_items')
+      .select('*')
+      .eq('scope_emp_id', scopeKey)
+      .eq('period_year', prevPeriod.year)
+      .eq('period_month', prevPeriod.month)
+  ]);
+  if (currentSavedResp.error) {
+    body.innerHTML = `<div class="err">Failed to load saved statement rows: ${currentSavedResp.error.message}</div>`;
+    return;
   }
+  if (prevSavedResp.error) {
+    body.innerHTML = `<div class="err">Failed to load previous month statement rows: ${prevSavedResp.error.message}</div>`;
+    return;
+  }
+
+  const currentSavedRows = currentSavedResp.data || [];
+  const prevSavedRows = prevSavedResp.data || [];
   const currentSavedMap = new Map(currentSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
   const prevSavedMap = new Map(prevSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
 
@@ -1330,7 +1326,6 @@ async function loadStockStatementData(){
   const headerMonth = `${monthLabel(targetMonth)} ${targetYear + (targetMonth >= 10 ? 1 : 0)}`;
   body.innerHTML = `
     <div class="small" style="margin-bottom:12px;">Scope: <b>${scopeName}</b> | Month: <b>${headerMonth}</b></div>
-    ${stockStatementBackendAvailable ? '' : '<div class="err">The database table for stock statements is not available yet, so this month is being saved in this browser for now. Please apply the new schema migration to make it shared.</div>'}
     <div class="kpi-row" style="margin-bottom:16px;">
       <div class="kpi"><div class="label">Opening Value</div><div class="value">${fmtCurrency(grandTotals.openingUnits * grandSaleRate)}</div><div class="sub">${fmtNum(grandTotals.openingUnits)} units</div></div>
       <div class="kpi"><div class="label">Primary Sales Value</div><div class="value">${fmtCurrency(grandTotals.primaryValue)}</div><div class="sub">${fmtNum(grandTotals.primaryUnits)} units</div></div>
@@ -1465,21 +1460,10 @@ async function loadStockStatementData(){
           updated_by: session.emp_id,
           updated_at: new Date().toISOString()
         };
-        const draftKey = stockStatementDraftKey(scopeKey, targetYear, targetMonth);
-        const writeDraft = () => {
-          const draftRows = JSON.parse(localStorage.getItem(draftKey) || '[]');
-          const nextRows = draftRows.filter(r => !(normalizeEmpId(r.stockist_code) === normalizeEmpId(row.stockist_code) && normalizeEmpId(r.product_code) === normalizeEmpId(row.product_code)));
-          nextRows.push({ ...payload });
-          localStorage.setItem(draftKey, JSON.stringify(nextRows));
-        };
-        if (stockStatementBackendAvailable) {
-          const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-          if (error) {
-            stockStatementBackendAvailable = false;
-            writeDraft();
-          }
-        } else {
-          writeDraft();
+        const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+        if (error) {
+          alert("Failed to save statement: " + error.message);
+          return;
         }
         await loadStockStatementData();
       };
