@@ -1355,7 +1355,7 @@ async function handleTargetUpload(e){
   }
 
   status.textContent = "Clearing old target records...";
-  const delResp = await fetch(targetsUrl, {
+  const delResp = await fetch(`${targetsUrl}?id=gte.0`, {
     method: "DELETE",
     headers: {
       "apikey": SUPABASE_ANON_KEY,
