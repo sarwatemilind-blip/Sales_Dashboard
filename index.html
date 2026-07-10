@@ -1301,7 +1301,7 @@ async function loadStockStatementData(){
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
       const openingEditable = isInitialMonth && !prevSaved;
-      const openingDisplay = openingEditable && !saved && !prevSaved ? '' : openingUnits;
+      const openingDisplay = openingEditable ? (saved || prevSaved ? openingUnits : '') : '';
       return {
         stockist_code: stockistCode,
         stockist_name: (sales?.stockist_name || saved?.stockist_name || stockistName || '').toString().trim(),
