@@ -1294,6 +1294,13 @@ async function handleTargetUpload(e){
   if (!file) return;
   const status = document.getElementById("targetUpStatus");
   const progBar = document.getElementById("targetProgBar");
+  const targetsUrl = `${SUPABASE_URL}/rest/v1/targets`;
+  const targetsHeaders = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+  };
 
   status.textContent = "Reading file...";
   const buf = await file.arrayBuffer();
@@ -1314,6 +1321,22 @@ async function handleTargetUpload(e){
     const orig = keyMap[col];
     return orig !== undefined ? (row[orig] ?? '') : '';
   };
+  const cleanText = (value) => {
+    if (value === null || value === undefined) return '';
+    return value
+      .toString()
+      .normalize('NFKC')
+      .replace(/\\/g, '')
+      .replace(/[\u0000-\u001F\u007F]/g, ' ')
+      .replace(/[\uD800-\uDFFF]/g, '')
+      .replace(/[^\x20-\x7E]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+  const cleanNumber = (value) => {
+    const num = parseFloat(value);
+    return Number.isFinite(num) ? num : 0;
+  };
 
   const required = [
     'emp_id', 'hq_code', 'hq_name', 'brand', 'product_code', 'state',
@@ -1332,49 +1355,86 @@ async function handleTargetUpload(e){
   }
 
   status.textContent = "Clearing old target records...";
-  const { error: delError } = await sb.from('targets').delete().gte('id', 1);
-  if (delError) {
-    status.textContent = "Failed to clear existing targets: " + delError.message;
+  const delResp = await fetch(targetsUrl, {
+    method: "DELETE",
+    headers: {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=minimal"
+    }
+  });
+  if (!delResp.ok) {
+    status.textContent = "Failed to clear existing targets: " + (await delResp.text());
     return;
   }
 
   const batchSize = 250;
   let inserted = 0;
+  const failedRows = [];
   status.textContent = `Uploading ${rows.length} target rows...`;
+  const buildRow = (r) => ({
+    emp_id: cleanText(get(r, 'emp_id')),
+    hq_code: cleanText(get(r, 'hq_code')),
+    hq_name: cleanText(get(r, 'hq_name')),
+    brand: cleanText(get(r, 'brand')),
+    product_code: cleanText(get(r, 'product_code')),
+    state: cleanText(get(r, 'state')),
+    region: cleanText(get(r, 'region')),
+    no_of_be: cleanNumber(get(r, 'no_of_be')),
+    month_num: parseInt(get(r, 'month_num')) || null,
+    month_name: cleanText(get(r, 'month_name')),
+    year: parseInt(get(r, 'year')) || null,
+    val_target_total: cleanNumber(get(r, 'val_target_total')),
+    unit_target_total: cleanNumber(get(r, 'unit_target_total')),
+    val_target_per_be: cleanNumber(get(r, 'val_target_per_be')),
+    unit_target_per_be: cleanNumber(get(r, 'unit_target_per_be'))
+  });
+
   for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize).map(r => ({
-      emp_id: get(r, 'emp_id').toString().trim(),
-      hq_code: get(r, 'hq_code').toString().trim(),
-      hq_name: get(r, 'hq_name').toString().trim(),
-      brand: get(r, 'brand').toString().trim(),
-      product_code: get(r, 'product_code').toString().trim(),
-      state: get(r, 'state').toString().trim(),
-      region: get(r, 'region').toString().trim(),
-      no_of_be: parseFloat(get(r, 'no_of_be')) || 0,
-      month_num: parseInt(get(r, 'month_num')) || null,
-      month_name: get(r, 'month_name').toString().trim(),
-      year: parseInt(get(r, 'year')) || null,
-      val_target_total: parseFloat(get(r, 'val_target_total')) || 0,
-      unit_target_total: parseFloat(get(r, 'unit_target_total')) || 0,
-      val_target_per_be: parseFloat(get(r, 'val_target_per_be')) || 0,
-      unit_target_per_be: parseFloat(get(r, 'unit_target_per_be')) || 0
-    })).filter(r => r.emp_id && r.hq_code && r.month_num && r.year);
+    const batch = rows.slice(i, i + batchSize).map(buildRow).filter(r => r.emp_id && r.hq_code && r.month_num && r.year);
 
     if (batch.length > 0) {
-      const { error } = await sb.from('targets').insert(batch);
-      if (error) {
-        status.textContent = `Failed at row ${i + 1}: ${error.message}`;
-        console.error('Target upload error:', error);
-        return;
+      const batchResp = await fetch(targetsUrl, {
+        method: "POST",
+        headers: targetsHeaders,
+        body: JSON.stringify(batch)
+      });
+      if (!batchResp.ok) {
+        const batchErrorText = await batchResp.text();
+        console.warn('Batch insert failed, retrying row-by-row:', { startRow: i + 1, error: batchErrorText });
+        let recovered = 0;
+        for (let j = 0; j < batch.length; j++) {
+          const row = batch[j];
+          const rowResp = await fetch(targetsUrl, {
+            method: "POST",
+            headers: targetsHeaders,
+            body: JSON.stringify([row])
+          });
+          if (!rowResp.ok) {
+            const rowErrorText = await rowResp.text();
+            failedRows.push({ rowNumber: i + j + 1, emp_id: row.emp_id, hq_code: row.hq_code, error: rowErrorText });
+            console.warn('Target upload row skipped:', { rowNumber: i + j + 1, row, error: rowErrorText });
+            continue;
+          }
+          recovered++;
+        }
+        inserted += recovered;
+      } else {
+        inserted += batch.length;
       }
-      inserted += batch.length;
     }
 
     progBar.style.width = Math.round((Math.min(i + batchSize, rows.length) / rows.length) * 100) + "%";
     status.textContent = `Uploaded ${Math.min(i + batchSize, rows.length)} of ${rows.length} target rows...`;
   }
 
-  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${inserted} target rows.`;
+  if (failedRows.length > 0) {
+    const preview = failedRows.slice(0, 5).map(r => `${r.rowNumber} (${r.emp_id} / ${r.hq_code})`).join(", ");
+    status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Imported ${inserted} target rows. Skipped ${failedRows.length} row(s): ${preview}${failedRows.length > 5 ? ", ..." : ""}`;
+  } else {
+    status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${inserted} target rows.`;
+  }
 }
 
 // ---------------- STOCKIST MAPPING UPLOAD ----------------
