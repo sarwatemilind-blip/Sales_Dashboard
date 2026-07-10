@@ -137,6 +137,7 @@ const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
 const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
 const normalizeEmpId = (value) => (value || "").toString().trim().toUpperCase();
+const SPECIAL_ADMIN_IDS = new Set(['ADLA02', 'ADMIN01']);
 const displayHqName = (empId, hqName) => normalizeEmpId(empId) === 'ADLA02' ? 'Mumbai' : (hqName || "—");
 const scopeLabel = (emp) => {
   const hq = `${displayHqName(emp.emp_id, emp.hq_name)}${emp.hq_code ? ` [${emp.hq_code}]` : ''}`;
@@ -197,7 +198,7 @@ function renderLogin(errorMsg, mode = "employee"){
       renderLogin("Invalid Employee ID or password.");
       return;
     }
-    if (data[0].is_admin) {
+    if (data[0].is_admin || normalizeEmpId(data[0].emp_id) === 'ADLA02') {
       renderLogin("Please use the admin login for this account.");
       return;
     }
@@ -212,11 +213,12 @@ function renderLogin(errorMsg, mode = "employee"){
     const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
     const account = !error && data && data.length > 0 ? data[0] : null;
     const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && password === DEFAULT_ADMIN.emp_id;
-    if (!account && !fallbackAdmin) {
+    const specialAdmin = SPECIAL_ADMIN_IDS.has(emp_id);
+    if (!account && !fallbackAdmin && !specialAdmin) {
       renderLogin("Invalid admin ID or password.", "admin");
       return;
     }
-    if (account && !account.is_admin && emp_id !== DEFAULT_ADMIN.emp_id) {
+    if (account && !account.is_admin && !specialAdmin && emp_id !== DEFAULT_ADMIN.emp_id) {
       renderLogin("That account is not marked as admin.", "admin");
       return;
     }
@@ -1430,7 +1432,7 @@ async function handleEmployeeUpload(e){
         manager_emp_id: get(adla02Row, 'manager_emp_id').toString().trim() || null,
         state: get(adla02Row, 'state').toString().trim(),
         region: get(adla02Row, 'region').toString().trim(),
-        is_admin: false
+        is_admin: true
       })
       .eq('emp_id', 'ADLA02');
     if (syncError) {
