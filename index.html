@@ -1275,15 +1275,38 @@ async function handleStockistMappingUpload(e){
     return;
   }
 
+  // Step 1: Delete all existing records in batches to avoid RLS timeout issues
   status.textContent = "Clearing existing stockist mapping records…";
-  const { error: delError } = await sb.from('stockist_mapping').delete().neq('stockist_code', '___IMPOSSIBLE___');
-  if (delError) {
-    status.textContent = "Failed to clear existing stockist mapping: " + delError.message;
-    return;
+  let deleteFrom = 0;
+  let totalDeleted = 0;
+  while (true) {
+    // Fetch a batch of stockist_codes to delete
+    const { data: toDelete, error: fetchErr } = await sb
+      .from('stockist_mapping')
+      .select('stockist_code')
+      .range(0, 199);
+    if (fetchErr) {
+      status.textContent = "Failed to fetch records for deletion: " + fetchErr.message;
+      console.error('Delete fetch error:', fetchErr);
+      return;
+    }
+    if (!toDelete || toDelete.length === 0) break;
+    const codes = toDelete.map(r => r.stockist_code);
+    const { error: delError } = await sb.from('stockist_mapping').delete().in('stockist_code', codes);
+    if (delError) {
+      status.textContent = "Failed to clear stockist mapping: " + delError.message;
+      console.error('Delete error:', delError);
+      return;
+    }
+    totalDeleted += codes.length;
+    status.textContent = `Cleared ${totalDeleted} old records…`;
   }
+  console.log(`Deleted ${totalDeleted} old stockist_mapping records`);
 
+  // Step 2: Insert new records in batches
   status.textContent = `Uploading ${rows.length} stockist mapping records…`;
   const batchSize = 100;
+  let totalInserted = 0;
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize).map(r => ({
       distributor_code: (r.distributor_code || '').toString().trim(),
@@ -1308,15 +1331,19 @@ async function handleStockistMappingUpload(e){
     if (batch.length > 0) {
       const { error: insError } = await sb.from('stockist_mapping').insert(batch);
       if (insError) {
-        status.textContent = "Failed to insert batch: " + insError.message;
+        status.textContent = `Failed to insert batch at row ${i}: ` + insError.message;
+        console.error('Insert error at row', i, insError);
         return;
       }
+      totalInserted += batch.length;
     }
 
-    progBar.style.width = Math.round(((i + batch.length) / rows.length) * 100) + "%";
+    progBar.style.width = Math.round(((i + batchSize) / rows.length) * 100) + "%";
+    status.textContent = `Uploaded ${Math.min(i + batchSize, rows.length)} of ${rows.length} records…`;
   }
 
-  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${rows.length} stockist mapping records.`;
+  console.log(`Inserted ${totalInserted} stockist_mapping records`);
+  status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Successfully imported ${totalInserted} of ${rows.length} stockist mapping records.`;
 }
 
 // ---------------- INIT ----------------
