@@ -9,12 +9,21 @@
 <style>
   :root{
     --bg:#0f172a; --panel:#fff; --ink:#0f172a; --muted:#64748b;
-    --brand:#1d4ed8; --brand-dk:#1e3a8a; --good:#16a34a; --bad:#dc2626; --line:#e2e8f0;
+    --brand:#2563eb; --brand-dk:#1e3a8a; --good:#16a34a; --bad:#dc2626; --line:#e2e8f0;
+    --accent:#f97316; --accent2:#06b6d4; --accent3:#8b5cf6; --accent4:#f43f5e;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;color:var(--ink);}
+  body{
+    margin:0;
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(37,99,235,.16), transparent 28%),
+      radial-gradient(circle at top right, rgba(249,115,22,.14), transparent 24%),
+      linear-gradient(180deg, #f8fafc 0%, #eef2ff 45%, #fff7ed 100%);
+    color:var(--ink);
+  }
   .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-  .card{background:var(--panel);border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.10);padding:32px;width:100%;max-width:380px;}
+  .card{background:var(--panel);border-radius:18px;box-shadow:0 16px 40px rgba(15,23,42,.10);padding:32px;width:100%;max-width:1040px;border:1px solid rgba(37,99,235,.08);}
   .card h1{font-size:20px;margin:0 0 4px;}
   .card p.sub{color:var(--muted);font-size:13px;margin:0 0 24px;}
   label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em;}
@@ -27,7 +36,11 @@
   .err{background:#fef2f2;color:var(--bad);font-size:13px;border-radius:8px;padding:10px 12px;margin-bottom:14px;}
   .ok{background:#f0fdf4;color:var(--good);font-size:13px;border-radius:8px;padding:10px 12px;margin-bottom:14px;}
 
-  header{background:var(--bg);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  header{
+    background:linear-gradient(90deg, #0f172a 0%, #1e3a8a 50%, #7c3aed 100%);
+    color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    box-shadow:0 6px 20px rgba(15,23,42,.18);
+  }
   header .who{font-size:13px;color:#cbd5e1;}
   header .who b{color:#fff;}
   nav{display:flex;gap:8px;}
@@ -39,7 +52,10 @@
   select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff;}
 
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px;}
-  .kpi{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06);}
+  .kpi{background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 10px 24px rgba(15,23,42,.08);border-top:5px solid var(--brand);}
+  .kpi:nth-child(2){border-top-color:var(--accent);}
+  .kpi:nth-child(3){border-top-color:var(--accent2);}
+  .kpi:nth-child(4){border-top-color:var(--accent3);}
   .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;}
   .kpi .value{font-size:24px;font-weight:700;}
   .kpi .sub{font-size:12px;margin-top:4px;color:var(--muted);}
@@ -52,14 +68,46 @@
   td.num,th.num{text-align:right;}
   .bar-wrap{width:120px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px;}
   .bar-fill{height:100%;background:var(--brand);}
-  .section-title{font-weight:700;font-size:15px;margin:28px 0 10px;}
+  .section-title{
+    display:inline-flex;align-items:center;gap:8px;
+    font-weight:700;font-size:15px;margin:28px 0 10px;
+    padding:8px 14px;border-radius:999px;
+    background:linear-gradient(90deg, #2563eb, #7c3aed 48%, #f97316);
+    color:#fff;box-shadow:0 8px 20px rgba(37,99,235,.18);
+  }
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#eef2ff;color:var(--brand-dk);}
   .muted{color:var(--muted);}
-  .upload-box{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(15,23,42,.06);}
+  .upload-box{
+    background:#fff;border-radius:16px;padding:24px;
+    box-shadow:0 10px 24px rgba(15,23,42,.08);
+    border:1px solid rgba(37,99,235,.08);
+    border-top:5px solid var(--accent2);
+  }
   .progress{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin:14px 0;}
   .progress > div{height:100%;background:var(--good);width:0%;transition:width .2s;}
   .small{font-size:12px;color:var(--muted);}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .login-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch;}
+  .login-card{
+    border-radius:16px;padding:20px;border:1px solid rgba(37,99,235,.10);
+    background:linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.94) 100%);
+    box-shadow:0 10px 24px rgba(15,23,42,.08);
+  }
+  .login-card.employee{border-top:5px solid var(--brand);}
+  .login-card.admin{border-top:5px solid var(--accent);}
+  .login-card h2{margin:8px 0 4px;font-size:18px;}
+  .login-card .login-note{font-size:12px;color:var(--muted);margin:0 0 16px;}
+  .login-badge{
+    display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;
+    letter-spacing:.04em;text-transform:uppercase;color:#fff;
+    background:linear-gradient(90deg, #2563eb, #7c3aed);
+  }
+  .login-badge.admin{background:linear-gradient(90deg, #f97316, #ef4444);}
+  .team-total-row td{background:linear-gradient(90deg, rgba(37,99,235,.06), rgba(249,115,22,.08)); font-weight:700; border-top:1px solid rgba(37,99,235,.18);}
+  .total-chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff7ed;color:#9a3412;font-size:11px;font-weight:700;}
+  @media (max-width: 900px){
+    .login-grid{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
@@ -88,47 +136,111 @@ const app = document.getElementById("app");
 const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
 const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
+const normalizeEmpId = (value) => (value || "").toString().trim().toUpperCase();
+const displayHqName = (empId, hqName) => normalizeEmpId(empId) === 'ADLA02' ? 'Mumbai' : (hqName || "—");
+const scopeLabel = (emp) => {
+  const hq = `${displayHqName(emp.emp_id, emp.hq_name)}${emp.hq_code ? ` [${emp.hq_code}]` : ''}`;
+  return `${emp.name || emp.emp_id} (${emp.designation || 'Emp'} · ${hq})`;
+};
+const DEFAULT_ADMIN = {
+  emp_id: 'ADMIN01',
+  name: 'Admin User',
+  designation: 'ADMIN',
+  hq_code: 'S0217',
+  hq_name: 'Mumbai',
+  manager_emp_id: null,
+  is_admin: true
+};
 
 // ---------------- LOGIN ----------------
-function renderLogin(errorMsg){
+function renderLogin(errorMsg, mode = "employee"){
   app.innerHTML = `
     <div class="center-screen">
       <div class="card">
-        <h1>Adonis Field Force</h1>
-        <p class="sub">Sign in with your Employee ID</p>
-        ${errorMsg ? `<div class="err">${errorMsg}</div>` : ""}
-        <form id="loginForm">
-          <label>Employee ID</label>
-          <input id="empId" autocomplete="username" placeholder="e.g. ADLA95" required />
-          <label>Password</label>
-          <input id="password" type="password" autocomplete="current-password" required />
-          <button class="btn-primary" type="submit">Sign in</button>
-        </form>
-        <p class="small" style="margin-top:14px;">Default password = your Employee ID, unless your admin has changed it.</p>
+        <div style="margin-bottom:18px;">
+          <div class="login-badge">Field Sales Dashboard</div>
+          <h1 style="margin-top:10px;">Adonis Field Force</h1>
+          <p class="sub">Employee and admin access are now separated.</p>
+          ${errorMsg ? `<div class="err">${errorMsg}</div>` : ""}
+        </div>
+        <div class="login-grid">
+          <form id="employeeLoginForm" class="login-card employee">
+            <div class="login-badge">Employee Login</div>
+            <h2>Sign in as field force</h2>
+            <p class="login-note">Use your employee ID and password. Admin accounts will be rejected here.</p>
+            <label>Employee ID</label>
+            <input id="empId" autocomplete="username" placeholder="e.g. ADLA95" required />
+            <label>Password</label>
+            <input id="password" type="password" autocomplete="current-password" required />
+            <button class="btn-primary" type="submit">Employee Sign in</button>
+          </form>
+          <form id="adminLoginForm" class="login-card admin">
+            <div class="login-badge admin">Admin Login</div>
+            <h2>Sign in as admin</h2>
+            <p class="login-note">Use the admin account only. Normal employee accounts will be rejected here.</p>
+            <label>Admin ID</label>
+            <input id="adminEmpId" autocomplete="username" placeholder="e.g. ADMIN01" required />
+            <label>Password</label>
+            <input id="adminPassword" type="password" autocomplete="current-password" required />
+            <button class="btn-primary" type="submit" style="background:linear-gradient(90deg,#f97316,#ef4444);">Admin Sign in</button>
+          </form>
+        </div>
+        <p class="small" style="margin-top:14px;">Default employee password = your Employee ID, unless your admin has changed it. Admin password can be set separately.</p>
       </div>
     </div>`;
-  document.getElementById("loginForm").onsubmit = async (e) => {
+  document.getElementById("employeeLoginForm").onsubmit = async (e) => {
     e.preventDefault();
-    const emp_id = document.getElementById("empId").value.trim().toUpperCase();
+    const emp_id = normalizeEmpId(document.getElementById("empId").value);
     const password = document.getElementById("password").value;
     const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
     if (error || !data || data.length === 0) {
       renderLogin("Invalid Employee ID or password.");
       return;
     }
-    session = data[0];
+    if (data[0].is_admin) {
+      renderLogin("Please use the admin login for this account.");
+      return;
+    }
+    session = { ...data[0], hq_name: displayHqName(data[0].emp_id, data[0].hq_name) };
     await loadDownline();
     renderShell('dashboard');
+  };
+  document.getElementById("adminLoginForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const emp_id = normalizeEmpId(document.getElementById("adminEmpId").value);
+    const password = document.getElementById("adminPassword").value;
+    const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
+    const account = !error && data && data.length > 0 ? data[0] : null;
+    const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && password === DEFAULT_ADMIN.emp_id;
+    if (!account && !fallbackAdmin) {
+      renderLogin("Invalid admin ID or password.", "admin");
+      return;
+    }
+    if (account && !account.is_admin && emp_id !== DEFAULT_ADMIN.emp_id) {
+      renderLogin("That account is not marked as admin.", "admin");
+      return;
+    }
+    session = account ? { ...account, hq_name: displayHqName(account.emp_id, account.hq_name) } : { ...DEFAULT_ADMIN };
+    session.is_admin = true;
+    session.hq_name = displayHqName(session.emp_id, session.hq_name);
+    await loadDownline();
+    renderShell('admin');
   };
 }
 
 async function loadDownline(){
+  if (session?.is_admin) {
+    const { data: emps } = await sb.from('employees').select('emp_id, name, designation, hq_code, hq_name, manager_emp_id, state, region');
+    allDownlineEmployees = (emps || []).map(e => ({ ...e, hq_name: displayHqName(e.emp_id, e.hq_name) }));
+    downlineIds = allDownlineEmployees.map(e => e.emp_id);
+    return;
+  }
   const { data, error } = await sb.rpc('downline', { root: session.emp_id });
   downlineIds = (data || []).map(r => r.emp_id);
   if (downlineIds.length === 0) downlineIds = [session.emp_id];
 
-  const { data: emps } = await sb.from('employees').select('emp_id, name, designation, manager_emp_id').in('emp_id', downlineIds);
-  allDownlineEmployees = emps || [];
+  const { data: emps } = await sb.from('employees').select('emp_id, name, designation, hq_code, hq_name, manager_emp_id, state, region').in('emp_id', downlineIds);
+  allDownlineEmployees = (emps || []).map(e => ({ ...e, hq_name: displayHqName(e.emp_id, e.hq_name) }));
 }
 
 function logout(){
@@ -138,16 +250,13 @@ function logout(){
 
 // ---------------- SHELL ----------------
 function renderShell(tab){
-  const canAdmin = !!(
-    session.is_admin ||
-    session.emp_id === 'ADLA02' ||
-    String(session.designation || '').trim().toUpperCase() === 'ADMIN'
-  );
+  const canAdmin = !!session.is_admin;
+  const headerHq = displayHqName(session.emp_id, session.hq_name);
   app.innerHTML = `
     <header>
       <div>
         <div style="font-weight:700;">Adonis Field Force — Sales Dashboard</div>
-        <div class="who">Logged in as <b>${session.name || session.emp_id}</b> · ${session.designation} ${session.hq_name ? "· " + session.hq_name : ""}</div>
+        <div class="who">Logged in as <b>${session.name || session.emp_id}</b> · ${session.designation} ${headerHq ? "· " + headerHq : ""}</div>
       </div>
       <nav>
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
@@ -192,7 +301,7 @@ async function renderDashboard(){
   const main = document.getElementById("main");
   main.innerHTML = `
     <div class="toolbar">
-      <select id="scopeSel" style="margin-right: 10px; display: ${session.designation === 'BE' ? 'none' : 'inline-block'}; max-width: 250px;"></select>
+      <select id="scopeSel" style="margin-right: 10px; display: ${session.designation === 'BE' ? 'none' : 'inline-block'}; max-width: 360px;"></select>
       <select id="viewTypeSel" style="margin-right: 10px;">
         <option value="monthly" ${currentView==='monthly'?'selected':''}>Monthly</option>
         <option value="bimonthly" ${currentView==='bimonthly'?'selected':''}>Bi-Monthly</option>
@@ -219,19 +328,19 @@ async function renderDashboard(){
     const managers = allDownlineEmployees.filter(e => e.designation !== 'BE' && e.emp_id !== session.emp_id).sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
     const bes = allDownlineEmployees.filter(e => e.designation === 'BE').sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
     
-    let html = `<option value="overall" ${selectedEmpId==='overall'?'selected':''}>Overall Scope (${session.name || session.emp_id})</option>`;
+    let html = `<option value="overall" ${selectedEmpId==='overall'?'selected':''}>Overall Scope (${scopeLabel(session)})</option>`;
     
     if (managers.length > 0) {
       html += `<optgroup label="Managers">`;
       managers.forEach(m => {
-        html += `<option value="${m.emp_id}" ${selectedEmpId===m.emp_id?'selected':''}>${m.name || m.emp_id} (${m.designation})</option>`;
+        html += `<option value="${m.emp_id}" ${selectedEmpId===m.emp_id?'selected':''}>${scopeLabel(m)}</option>`;
       });
       html += `</optgroup>`;
     }
     if (bes.length > 0) {
       html += `<optgroup label="Field Force (BE)">`;
       bes.forEach(b => {
-        html += `<option value="${b.emp_id}" ${selectedEmpId===b.emp_id?'selected':''}>${b.name || b.emp_id} (BE - ${b.hq_code || ''})</option>`;
+        html += `<option value="${b.emp_id}" ${selectedEmpId===b.emp_id?'selected':''}>${scopeLabel(b)}</option>`;
       });
       html += `</optgroup>`;
     }
@@ -560,7 +669,7 @@ async function loadDashboardData(){
       return {
         "BE Employee ID": r.emp_id,
         "BE Name": r.emp_name,
-        "HQ": r.hq,
+        "HQ": displayHqName(r.emp_id, r.hq),
         "Region": r.region,
         "Brand": r.brand,
         "Category": getBrandCategory(r.brand),
@@ -587,7 +696,7 @@ async function loadDashboardData(){
       return {
         "BE Employee ID": t.emp.emp_id,
         "BE Name": t.emp.name || "—",
-        "HQ": t.emp.hq_name || "—",
+        "HQ": displayHqName(t.emp.emp_id, t.emp.hq_name),
         "Pillar Target": t.pillar.targetVal,
         "Pillar Achievement": t.pillar.achVal,
         "Pillar % Ach": pPct !== null ? pPct.toFixed(1) + "%" : "—",
@@ -602,6 +711,16 @@ async function loadDashboardData(){
         "Total YoY Growth": tG !== null ? tG.toFixed(1) + "%" : "—"
       };
     });
+
+    const beBrandGroups = [];
+    for (const row of beBrandRows) {
+      const lastGroup = beBrandGroups[beBrandGroups.length - 1];
+      if (!lastGroup || lastGroup[0].emp_id !== row.emp_id) {
+        beBrandGroups.push([row]);
+      } else {
+        lastGroup.push(row);
+      }
+    }
 
     if (teamRows.length) {
       teamHtml = `
@@ -665,7 +784,7 @@ async function loadDashboardData(){
         </div>
         
         <details style="margin-bottom: 24px;">
-          <summary style="cursor: pointer; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(15,23,42,.06); font-weight: 600; color: var(--primary);">View Full Team (BE-wise Brand-wise Detail)</summary>
+          <summary style="cursor: pointer; padding: 10px 14px; background: linear-gradient(90deg, rgba(37,99,235,.10), rgba(249,115,22,.10)); border: 1px solid rgba(37,99,235,.12); border-radius: 8px; box-shadow: 0 1px 3px rgba(15,23,42,.06); font-weight: 700; color: var(--brand-dk);">View Full Team (BE-wise Brand-wise Detail)</summary>
           <div style="overflow-x: auto; margin-top: 10px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.06);">
             <table style="width: 100%;">
               <thead>
@@ -684,21 +803,47 @@ async function loadDashboardData(){
                 </tr>
               </thead>
               <tbody>
-                ${beBrandRows.map(r => {
-                  const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
-                  const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
-                  return `<tr>
-                    <td>${r.emp_name} <span class="muted">(${r.emp_id})</span></td>
-                    <td>${r.hq}</td>
-                    <td>${r.region}</td>
-                    <td>${r.brand}</td>
-                    <td><span class="pill" style="background:${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">${getBrandCategory(r.brand)}</span></td>
-                    <td class="num">${fmtNum(r.targetVal)}</td>
-                    <td class="num">${fmtNum(r.achVal)}</td>
-                    <td class="num">${pct!==null?fmtPct(pct):'—'}</td>
-                    <td class="num">${fmtNum(r.targetUnit)}</td>
-                    <td class="num">${fmtNum(r.achUnit)}</td>
-                    <td class="num ${g===null?'':(g>=0?'pos':'neg')}">${g===null?'—':fmtPct(g)}</td>
+                ${beBrandGroups.map(group => {
+                  const head = group[0];
+                  const total = group.reduce((acc, row) => {
+                    acc.targetVal += row.targetVal || 0;
+                    acc.achVal += row.achVal || 0;
+                    acc.lastYearVal += row.lastYearVal || 0;
+                    acc.targetUnit += row.targetUnit || 0;
+                    acc.achUnit += row.achUnit || 0;
+                    return acc;
+                  }, { targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 });
+                  const detailRows = group.map(r => {
+                    const pct = r.targetVal > 0 ? (r.achVal/r.targetVal*100) : null;
+                    const g = r.lastYearVal > 0 ? ((r.achVal - r.lastYearVal)/r.lastYearVal*100) : null;
+                    return `<tr>
+                      <td>${r.emp_name} <span class="muted">(${r.emp_id})</span></td>
+                      <td>${displayHqName(r.emp_id, r.hq)}</td>
+                      <td>${r.region}</td>
+                      <td>${r.brand}</td>
+                      <td><span class="pill" style="background:${getBrandCategory(r.brand)==='Pillar'?'#eef2ff':'#f1f5f9'}; color:${getBrandCategory(r.brand)==='Pillar'?'var(--brand-dk)':'var(--muted)'}">${getBrandCategory(r.brand)}</span></td>
+                      <td class="num">${fmtNum(r.targetVal)}</td>
+                      <td class="num">${fmtNum(r.achVal)}</td>
+                      <td class="num">${pct!==null?fmtPct(pct):'—'}</td>
+                      <td class="num">${fmtNum(r.targetUnit)}</td>
+                      <td class="num">${fmtNum(r.achUnit)}</td>
+                      <td class="num ${g===null?'':(g>=0?'pos':'neg')}">${g===null?'—':fmtPct(g)}</td>
+                    </tr>`;
+                  }).join("");
+                  const totalPct = total.targetVal > 0 ? (total.achVal / total.targetVal * 100) : null;
+                  const totalG = total.lastYearVal > 0 ? ((total.achVal - total.lastYearVal) / total.lastYearVal * 100) : null;
+                  return `${detailRows}<tr class="team-total-row">
+                    <td><span class="total-chip">Total</span> ${head.emp_name} <span class="muted">(${head.emp_id})</span></td>
+                    <td>${displayHqName(head.emp_id, head.hq)}</td>
+                    <td>${head.region}</td>
+                    <td>All brands</td>
+                    <td></td>
+                    <td class="num">${fmtNum(total.targetVal)}</td>
+                    <td class="num">${fmtNum(total.achVal)}</td>
+                    <td class="num">${totalPct!==null?fmtPct(totalPct):'—'}</td>
+                    <td class="num">${fmtNum(total.targetUnit)}</td>
+                    <td class="num">${fmtNum(total.achUnit)}</td>
+                    <td class="num ${totalG===null?'':(totalG>=0?'pos':'neg')}">${totalG===null?'—':fmtPct(totalG)}</td>
                   </tr>`;
                 }).join("")}
               </tbody>
@@ -1239,7 +1384,7 @@ async function handleEmployeeUpload(e){
     manager_emp_id: get(r,'manager_emp_id').toString().trim() || null,
     state:          get(r,'state').toString().trim(),
     region:         get(r,'region').toString().trim(),
-    is_admin:       get(r,'emp_id').toString().trim() === 'ADLA02'
+    is_admin:       get(r,'designation').toString().trim().toUpperCase() === 'ADMIN'
   })).filter(x => x.emp_id && x.emp_id !== 'ADLA02');
 
   // PASS 1: Insert all employees with manager_emp_id = null to avoid FK violations
@@ -1272,6 +1417,26 @@ async function handleEmployeeUpload(e){
       }
     }
     progBar.style.width = (40 + Math.round(((i + batch.length) / withManager.length) * 35)) + '%';
+  }
+
+  const adla02Row = rows.find(r => get(r, 'emp_id').toString().trim() === 'ADLA02');
+  if (adla02Row) {
+    const { error: syncError } = await sb.from('employees')
+      .update({
+        name: get(adla02Row, 'name').toString().trim(),
+        designation: get(adla02Row, 'designation').toString().trim(),
+        hq_code: get(adla02Row, 'hq_code').toString().trim(),
+        hq_name: 'Mumbai',
+        manager_emp_id: get(adla02Row, 'manager_emp_id').toString().trim() || null,
+        state: get(adla02Row, 'state').toString().trim(),
+        region: get(adla02Row, 'region').toString().trim(),
+        is_admin: false
+      })
+      .eq('emp_id', 'ADLA02');
+    if (syncError) {
+      status.textContent = "Failed to sync ADLA02 HQ: " + syncError.message;
+      return;
+    }
   }
 
 
