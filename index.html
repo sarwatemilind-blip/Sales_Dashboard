@@ -726,6 +726,7 @@ async function loadDashboardData(){
       }
     }
 
+    lastDashboardData.beBrandTotals = [];
     lastDashboardData.beBrandDetail = beBrandGroups.flatMap(group => {
       const head = group[0];
       const total = group.reduce((acc, row) => {
@@ -740,6 +741,7 @@ async function loadDashboardData(){
         const pct = row.targetVal > 0 ? (row.achVal / row.targetVal * 100) : null;
         const g = row.lastYearVal > 0 ? ((row.achVal - row.lastYearVal) / row.lastYearVal * 100) : null;
         return {
+          "Row Type": "DETAIL",
           "BE Employee ID": row.emp_id,
           "BE Name": row.emp_name,
           "HQ": displayHqName(row.emp_id, row.hq),
@@ -757,12 +759,13 @@ async function loadDashboardData(){
       const totalPct = total.targetVal > 0 ? (total.achVal / total.targetVal * 100) : null;
       const totalG = total.lastYearVal > 0 ? ((total.achVal - total.lastYearVal) / total.lastYearVal * 100) : null;
       const totalRow = {
+        "Row Type": "TOTAL",
         "BE Employee ID": head.emp_id,
-        "BE Name": `${head.emp_name} Total`,
+        "BE Name": `${head.emp_name} TOTAL`,
         "HQ": displayHqName(head.emp_id, head.hq),
         "Region": head.region,
-        "Brand": "All brands",
-        "Category": "",
+        "Brand": "ALL BRANDS",
+        "Category": "SUMMARY",
         "Target (Value)": total.targetVal,
         "Achievement (Value)": total.achVal,
         "% Achievement": totalPct !== null ? totalPct.toFixed(1) + "%" : "—",
@@ -770,6 +773,7 @@ async function loadDashboardData(){
         "Achievement (Units)": total.achUnit,
         "Growth YoY": totalG !== null ? totalG.toFixed(1) + "%" : "—"
       };
+      lastDashboardData.beBrandTotals.push(totalRow);
       return [...detailRows, totalRow];
     });
 
@@ -1029,6 +1033,11 @@ function downloadDashboardDataExcel() {
     if (lastDashboardData.beBrandDetail && lastDashboardData.beBrandDetail.length > 0) {
       const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandDetail);
       XLSX.utils.book_append_sheet(wb, ws4, "BE x Brand Detail");
+    }
+
+    if (lastDashboardData.beBrandTotals && lastDashboardData.beBrandTotals.length > 0) {
+      const ws5 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandTotals);
+      XLSX.utils.book_append_sheet(wb, ws5, "BE Totals");
     }
     
     let label = "";
