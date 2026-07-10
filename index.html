@@ -41,6 +41,9 @@
     color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
     box-shadow:0 6px 20px rgba(15,23,42,.18);
   }
+  .brand-lockup{display:flex;align-items:center;gap:12px;min-width:0;}
+  .brand-logo{display:block;height:40px;width:auto;flex:0 0 auto;filter:drop-shadow(0 3px 8px rgba(15,23,42,.18));}
+  .brand-logo.login{height:56px;}
   header .who{font-size:13px;color:#cbd5e1;}
   header .who b{color:#fff;}
   nav{display:flex;gap:8px;}
@@ -158,8 +161,13 @@ function renderLogin(errorMsg, mode = "employee"){
     <div class="center-screen">
       <div class="card">
         <div style="margin-bottom:18px;">
-          <div class="login-badge">Field Sales Dashboard</div>
-          <h1 style="margin-top:10px;">Adonis Field Force</h1>
+          <div class="brand-lockup" style="margin-bottom:10px;">
+            <img src="adonis-logo.png" alt="Adonis logo" class="brand-logo login" />
+            <div>
+              <div class="login-badge">Field Sales Dashboard</div>
+              <h1 style="margin:10px 0 0;">Adonis Field Force</h1>
+            </div>
+          </div>
           <p class="sub">Employee and admin access are now separated.</p>
           ${errorMsg ? `<div class="err">${errorMsg}</div>` : ""}
         </div>
@@ -258,9 +266,12 @@ function renderShell(tab){
   const headerHq = displayHqName(session.emp_id, session.hq_name);
   app.innerHTML = `
     <header>
-      <div>
+      <div class="brand-lockup">
+        <img src="adonis-logo.png" alt="Adonis logo" class="brand-logo" />
+        <div>
         <div style="font-weight:700;">Adonis Field Force — Sales Dashboard</div>
         <div class="who">Logged in as <b>${session.name || session.emp_id}</b> · ${session.designation} ${headerHq ? "· " + headerHq : ""}</div>
+        </div>
       </div>
       <nav>
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
