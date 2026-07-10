@@ -108,6 +108,18 @@
   .login-badge.admin{background:linear-gradient(90deg, #f97316, #ef4444);}
   .team-total-row td{background:linear-gradient(90deg, rgba(37,99,235,.06), rgba(249,115,22,.08)); font-weight:700; border-top:1px solid rgba(37,99,235,.18);}
   .total-chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff7ed;color:#9a3412;font-size:11px;font-weight:700;}
+  .stock-shell{background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 24px rgba(15,23,42,.08);border:1px solid rgba(37,99,235,.08);}
+  .stock-table th{vertical-align:bottom;}
+  .stock-table td{vertical-align:middle;}
+  .stock-table .row-head{font-weight:700;}
+  .stock-table .row-sub{font-size:12px;color:var(--muted);}
+  .stock-table .stock-input{
+    width:100%;min-width:90px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+    background:#fff7ed;font-weight:600;
+  }
+  .stock-table .stock-input:disabled{background:#f8fafc;color:#475569;cursor:not-allowed;}
+  .stock-total-row td{background:linear-gradient(90deg, rgba(37,99,235,.06), rgba(249,115,22,.08)); font-weight:700;}
+  .stock-note{font-size:12px;color:var(--muted);margin-top:8px;}
   @media (max-width: 900px){
     .login-grid{grid-template-columns:1fr;}
   }
@@ -275,6 +287,7 @@ function renderShell(tab){
       </div>
       <nav>
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
+        <button id="navStock" class="${tab==='stock'?'active':''}">Stock Statement</button>
         ${canAdmin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
         <button id="navLogout">Logout</button>
       </nav>
@@ -282,10 +295,12 @@ function renderShell(tab){
     <main id="main"></main>
   `;
   document.getElementById("navDash").onclick = () => renderShell('dashboard');
+  document.getElementById("navStock").onclick = () => renderShell('stock');
   if (canAdmin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
   document.getElementById("navLogout").onclick = logout;
 
   if (tab === 'dashboard') renderDashboard();
+  else if (tab === 'stock') renderStockStatement();
   else if (tab === 'admin' && canAdmin) renderAdmin();
   else if (tab === 'admin') renderDashboard();
 }
@@ -311,6 +326,48 @@ if (currentYear < 2025 || currentYear > 2030) {
 let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd'
 let selectedEmpId = 'overall';
 let lastDashboardData = { kpis: [], brands: [], team: [] };
+let lastStockStatementData = { rows: [], scopeEmpId: 'overall', year: currentYear, month: currentMonth };
+
+const prevFiscalPeriod = (year, month) => month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
+
+function getActiveScopeIdsForSelection() {
+  if (selectedEmpId === 'overall') return [...downlineIds];
+  const list = [selectedEmpId];
+  let added = true;
+  while (added) {
+    added = false;
+    allDownlineEmployees.forEach(e => {
+      if (e.manager_emp_id && list.includes(e.manager_emp_id) && !list.includes(e.emp_id)) {
+        list.push(e.emp_id);
+        added = true;
+      }
+    });
+  }
+  return list;
+}
+
+function buildScopeOptionsHTML(selectedValue) {
+  const managers = allDownlineEmployees.filter(e => e.designation !== 'BE' && e.emp_id !== session.emp_id).sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
+  const bes = allDownlineEmployees.filter(e => e.designation === 'BE').sort((a,b) => (a.name||a.emp_id).localeCompare(b.name||b.emp_id));
+  let html = `<option value="overall" ${selectedValue === 'overall' ? 'selected' : ''}>Overall Scope (${scopeLabel(session)})</option>`;
+  if (managers.length > 0) {
+    html += `<optgroup label="Managers">`;
+    managers.forEach(m => {
+      html += `<option value="${m.emp_id}" ${selectedValue===m.emp_id?'selected':''}>${scopeLabel(m)}</option>`;
+    });
+    html += `</optgroup>`;
+  }
+  if (bes.length > 0) {
+    html += `<optgroup label="Field Force (BE)">`;
+    bes.forEach(b => {
+      html += `<option value="${b.emp_id}" ${selectedValue===b.emp_id?'selected':''}>${scopeLabel(b)}</option>`;
+    });
+    html += `</optgroup>`;
+  }
+  return html;
+}
 
 async function renderDashboard(){
   const main = document.getElementById("main");
@@ -1019,6 +1076,261 @@ async function loadDashboardData(){
 
     ${teamHtml}
   `;
+}
+
+async function renderStockStatement(){
+  const main = document.getElementById("main");
+  main.innerHTML = `
+    <div class="toolbar">
+      <select id="stockScopeSel" style="margin-right:10px; display:${session.designation === 'BE' ? 'none' : 'inline-block'}; max-width:360px;"></select>
+      <select id="stockMonthSel" style="margin-right:10px;"></select>
+      <select id="stockYearSel" style="margin-right:10px;">
+        <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27</option>
+        <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26</option>
+      </select>
+      <span class="pill" id="stockScopePill">Loading...</span>
+      <button id="stockRefreshBtn" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Refresh</button>
+    </div>
+    <div class="stock-shell">
+      <div class="section-title" style="margin-top:0;">Stock & Sales Statement</div>
+      <p class="small">Opening stock is entered once for the first month in the chain. Primary sales are pulled automatically from uploaded sales data. Secondary stock is entered each month, and closing rolls forward to the next month.</p>
+      <div id="stockBody"><p class="muted">Loading...</p></div>
+    </div>
+  `;
+
+  const scopeSel = document.getElementById("stockScopeSel");
+  const monthSel = document.getElementById("stockMonthSel");
+  const yearSel = document.getElementById("stockYearSel");
+  const scopePill = document.getElementById("stockScopePill");
+
+  if (scopeSel && session.designation !== 'BE') {
+    scopeSel.innerHTML = buildScopeOptionsHTML(selectedEmpId);
+    scopeSel.onchange = () => {
+      selectedEmpId = scopeSel.value;
+      loadStockStatementData();
+    };
+  }
+
+  monthSel.innerHTML = FY_MONTHS.map(m => `<option value="${m.n}" ${m.n===currentMonth?'selected':''}>${m.label}</option>`).join("");
+  monthSel.onchange = () => {
+    currentMonth = parseInt(monthSel.value);
+    loadStockStatementData();
+  };
+  yearSel.onchange = () => {
+    currentYear = parseInt(yearSel.value);
+    loadStockStatementData();
+  };
+  document.getElementById("stockRefreshBtn").onclick = () => loadStockStatementData();
+
+  if (scopePill) {
+    scopePill.textContent = `${getActiveScopeIdsForSelection().length} employee${getActiveScopeIdsForSelection().length > 1 ? 's' : ''} in scope`;
+  }
+
+  await loadStockStatementData();
+}
+
+async function loadStockStatementData(){
+  const body = document.getElementById("stockBody");
+  if (!body) return;
+
+  const scopeIds = getActiveScopeIdsForSelection();
+  const scopeKey = selectedEmpId || 'overall';
+  const scopeName = selectedEmpId === 'overall'
+    ? `Overall Scope (${scopeLabel(session)})`
+    : (allDownlineEmployees.find(e => e.emp_id === selectedEmpId) ? scopeLabel(allDownlineEmployees.find(e => e.emp_id === selectedEmpId)) : scopeLabel(session));
+  const scopePill = document.getElementById("stockScopePill");
+  if (scopePill) {
+    scopePill.textContent = `${scopeIds.length} employee${scopeIds.length > 1 ? 's' : ''} in scope`;
+  }
+
+  body.innerHTML = `<p class="muted">Loading...</p>`;
+
+  async function fetchAllRowsForScope(tableName) {
+    let allData = [];
+    let from = 0;
+    const orderCol = tableName === 'sales_attributed' ? 'sale_id' : 'id';
+    while (true) {
+      const { data, error } = await sb.from(tableName)
+        .select('*')
+        .in(tableName === 'sales_attributed' ? 'be_emp_id' : 'scope_emp_id', scopeIds)
+        .order(orderCol)
+        .range(from, from + 999);
+      if (error) {
+        console.error(`Error loading ${tableName}`, error);
+        break;
+      }
+      allData = allData.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+    return allData;
+  }
+
+  const [salesRows, statementRows] = await Promise.all([
+    fetchAllRowsForScope('sales_attributed'),
+    (async () => {
+      const { data, error } = await sb.from('stock_statements')
+        .select('*')
+        .eq('scope_emp_id', scopeKey)
+        .order('period_year', { ascending: true })
+        .order('period_month', { ascending: true });
+      if (error) {
+        console.error('Error loading stock statements', error);
+        return [];
+      }
+      return data || [];
+    })()
+  ]);
+
+  const endKey = currentYear * 100 + currentMonth;
+  const relevantStatements = statementRows.filter(r => (r.period_year * 100 + r.period_month) <= endKey);
+  const startRow = relevantStatements.length > 0 ? relevantStatements[0] : null;
+  const startYear = startRow ? startRow.period_year : currentYear;
+  const startMonth = startRow ? startRow.period_month : currentMonth;
+
+  const salesByPeriod = {};
+  salesRows.forEach(r => {
+    const pKey = periodKey(r.period_year, r.period_month);
+    if (!salesByPeriod[pKey]) salesByPeriod[pKey] = { qty: 0, val: 0 };
+    salesByPeriod[pKey].qty += parseFloat(r.quantity) || 0;
+    salesByPeriod[pKey].val += parseFloat(r.amount) || 0;
+  });
+
+  const statementMap = {};
+  relevantStatements.forEach(r => {
+    statementMap[periodKey(r.period_year, r.period_month)] = r;
+  });
+
+  const rows = [];
+  let cursorYear = startYear;
+  let cursorMonth = startMonth;
+  let carryClosing = null;
+  while (cursorYear * 100 + cursorMonth <= endKey) {
+    const key = periodKey(cursorYear, cursorMonth);
+    const saved = statementMap[key] || null;
+    const sales = salesByPeriod[key] || { qty: 0, val: 0 };
+    const saleRate = sales.qty > 0 ? (sales.val / sales.qty) : 0;
+    const openingUnits = rows.length === 0
+      ? (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : 0)
+      : carryClosing;
+    const savedSecondary = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : null;
+    const secondaryUnits = savedSecondary != null ? savedSecondary : 0;
+    const totalUnits = openingUnits + sales.qty;
+    const closingUnits = totalUnits - secondaryUnits;
+    const secondaryValue = secondaryUnits * saleRate;
+    const closingValue = closingUnits * saleRate;
+
+    rows.push({
+      periodYear: cursorYear,
+      periodMonth: cursorMonth,
+      monthLabel: monthLabel(cursorMonth),
+      firstRow: rows.length === 0,
+      saved: !!saved,
+      openingUnits,
+      primaryUnits: sales.qty,
+      primaryValue: sales.val,
+      saleRate,
+      totalUnits,
+      secondaryUnits,
+      secondaryValue,
+      closingUnits,
+      closingValue
+    });
+
+    carryClosing = closingUnits;
+    const next = nextFiscalPeriod(cursorYear, cursorMonth);
+    cursorYear = next.year;
+    cursorMonth = next.month;
+  }
+
+  lastStockStatementData = { rows, scopeEmpId: scopeKey, year: currentYear, month: currentMonth };
+
+  if (rows.length === 0) {
+    body.innerHTML = `<p class="muted">No statement rows available.</p>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="small" style="margin-bottom:12px;">Scope: <b>${scopeName}</b></div>
+    <div style="overflow-x:auto;">
+      <table class="stock-table" style="min-width:1320px; width:100%;">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="num">Opening Stock<br>(Units)</th>
+            <th class="num">Primary Sales<br>(Units)</th>
+            <th class="num">Primary Sales<br>(Value)</th>
+            <th class="num">Sale Rate</th>
+            <th class="num">Total<br>(Units)</th>
+            <th class="num">Secondary Sales<br>(Units)</th>
+            <th class="num">Secondary Sales<br>(Value)</th>
+            <th class="num">Closing<br>(Units)</th>
+            <th class="num">Closing<br>(Value)</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => {
+            const rowKey = periodKey(row.periodYear, row.periodMonth);
+            const rowClass = row.firstRow ? 'stock-total-row' : '';
+            return `<tr class="${rowClass}">
+              <td>
+                <div class="row-head">${row.monthLabel} ${row.periodYear + (row.periodMonth >= 10 ? 1 : 0)}</div>
+                <div class="row-sub">${row.saved ? 'Saved' : 'Not saved yet'}</div>
+              </td>
+              <td class="num">
+                <input id="stockOpening_${rowKey}" class="stock-input" type="number" step="0.01" min="0" value="${row.openingUnits !== null && row.openingUnits !== undefined ? row.openingUnits : ''}" ${row.firstRow ? '' : 'disabled'} />
+              </td>
+              <td class="num">${fmtNum(row.primaryUnits)}</td>
+              <td class="num">${fmtNum(row.primaryValue)}</td>
+              <td class="num">${row.saleRate ? row.saleRate.toFixed(2) : '0.00'}</td>
+              <td class="num">${fmtNum(row.totalUnits)}</td>
+              <td class="num">
+                <input id="stockSecondary_${rowKey}" class="stock-input" type="number" step="0.01" min="0" value="${row.saved ? row.secondaryUnits : ''}" placeholder="Enter units" />
+              </td>
+              <td class="num">${fmtNum(row.secondaryValue)}</td>
+              <td class="num">${fmtNum(row.closingUnits)}</td>
+              <td class="num">${fmtNum(row.closingValue)}</td>
+              <td><button class="btn-primary" id="stockSave_${rowKey}" type="button" style="width:auto; padding:8px 12px;">Save</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="stock-note">Opening is editable only for the first row in the chain. For later months, opening rolls forward automatically from the previous month’s closing balance.</div>
+  `;
+
+  rows.forEach(row => {
+    const rowKey = periodKey(row.periodYear, row.periodMonth);
+    const btn = document.getElementById(`stockSave_${rowKey}`);
+    if (!btn) return;
+    btn.onclick = async () => {
+      const openingInput = document.getElementById(`stockOpening_${rowKey}`);
+      const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
+      const openingUnits = row.firstRow ? parseFloat(openingInput.value) : row.openingUnits;
+      const secondaryUnits = parseFloat(secondaryInput.value);
+
+      if (row.firstRow && !Number.isFinite(openingUnits)) {
+        alert("Please enter the opening stock units for the first month.");
+        return;
+      }
+      const payload = {
+        scope_emp_id: scopeKey,
+        period_year: row.periodYear,
+        period_month: row.periodMonth,
+        opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
+        secondary_units: Number.isFinite(secondaryUnits) ? secondaryUnits : 0,
+        updated_by: session.emp_id,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await sb.from('stock_statements').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month' });
+      if (error) {
+        alert("Failed to save statement: " + error.message);
+        return;
+      }
+      await loadStockStatementData();
+    };
+  });
 }
 
 function downloadDashboardDataExcel() {
