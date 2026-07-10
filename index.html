@@ -1402,7 +1402,7 @@ async function loadStockStatementData(){
                 <td class="num">${fmtCurrency(row.closingValue)}</td>
                 <td style="white-space:nowrap;">
                   <button class="btn-primary" id="stockSave_${rowKey}" type="button" style="width:auto; padding:8px 12px; margin-right:6px;">Save</button>
-                  <button class="btn-ghost" id="stockDelete_${rowKey}" type="button" style="width:auto; padding:8px 12px; color:var(--bad); border-color:var(--bad);">Delete</button>
+                  <button class="btn-ghost" id="stockDelete_${rowKey}" type="button" style="width:auto; padding:8px 12px; color:var(--bad); border-color:var(--bad);">Clear</button>
                 </td>
               </tr>`;
             }).join('')}
@@ -1438,7 +1438,7 @@ async function loadStockStatementData(){
         </tbody>
       </table>
     </div>
-    <div class="stock-note">Opening is editable only for the first statement month. Every later month carries the previous closing forward automatically. Use Save to update a row or Delete to clear it before final submission. Totals are shown in rupees in the value columns.</div>
+    <div class="stock-note">Opening is editable only for the first statement month. Every later month carries the previous closing forward automatically. Use Save to update a row or Clear to reset the entered values before final submission. Totals are shown in rupees in the value columns.</div>
   `;
 
   groups.forEach(group => {
@@ -1446,6 +1446,36 @@ async function loadStockStatementData(){
       const rowKey = statementDomKey(row.stockist_code, row.product_code);
       const btn = document.getElementById(`stockSave_${rowKey}`);
       const delBtn = document.getElementById(`stockDelete_${rowKey}`);
+      const persistRow = async (nextOpeningUnits, nextSecondaryUnits) => {
+        const payload = {
+          scope_emp_id: scopeKey,
+          period_year: targetYear,
+          period_month: targetMonth,
+          stockist_code: row.stockist_code,
+          stockist_name: row.stockist_name,
+          product_code: row.product_code,
+          product_name: row.product_name,
+          brand: row.brand,
+          opening_units: Number.isFinite(nextOpeningUnits) ? nextOpeningUnits : row.openingUnits,
+          primary_units: row.primaryUnits,
+          primary_value: row.primaryValue,
+          sale_rate: row.saleRate,
+          total_units: row.totalUnits,
+          secondary_units: Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0,
+          secondary_value: (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0) * row.saleRate,
+          closing_units: row.totalUnits - (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0),
+          closing_value: (row.totalUnits - (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0)) * row.saleRate,
+          updated_by: session.emp_id,
+          updated_at: new Date().toISOString()
+        };
+        const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+        if (error) {
+          alert("Failed to save statement: " + error.message);
+          return false;
+        }
+        await loadStockStatementData();
+        return true;
+      };
       if (btn) {
         btn.onclick = async () => {
           const openingInput = document.getElementById(`stockOpening_${rowKey}`);
@@ -1456,50 +1486,17 @@ async function loadStockStatementData(){
             alert("Please enter the opening stock units for the first statement month.");
             return;
           }
-          const payload = {
-            scope_emp_id: scopeKey,
-            period_year: targetYear,
-            period_month: targetMonth,
-            stockist_code: row.stockist_code,
-            stockist_name: row.stockist_name,
-            product_code: row.product_code,
-            product_name: row.product_name,
-            brand: row.brand,
-            opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
-            primary_units: row.primaryUnits,
-            primary_value: row.primaryValue,
-            sale_rate: row.saleRate,
-            total_units: row.totalUnits,
-            secondary_units: Number.isFinite(secondaryUnits) ? secondaryUnits : 0,
-            secondary_value: (Number.isFinite(secondaryUnits) ? secondaryUnits : 0) * row.saleRate,
-            closing_units: row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0),
-            closing_value: (row.totalUnits - (Number.isFinite(secondaryUnits) ? secondaryUnits : 0)) * row.saleRate,
-            updated_by: session.emp_id,
-            updated_at: new Date().toISOString()
-          };
-          const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-          if (error) {
-            alert("Failed to save statement: " + error.message);
-            return;
-          }
-          await loadStockStatementData();
+          await persistRow(openingUnits, secondaryUnits);
         };
       }
       if (delBtn) {
         delBtn.onclick = async () => {
-          if (!confirm(`Delete the saved statement row for ${row.stockist_name} - ${row.product_name}?`)) return;
-          const { error } = await sb.from('stock_statement_items')
-            .delete()
-            .eq('scope_emp_id', scopeKey)
-            .eq('period_year', targetYear)
-            .eq('period_month', targetMonth)
-            .eq('stockist_code', row.stockist_code)
-            .eq('product_code', row.product_code);
-          if (error) {
-            alert("Failed to delete statement row: " + error.message);
-            return;
-          }
-          await loadStockStatementData();
+          if (!confirm(`Clear the entered values for ${row.stockist_name} - ${row.product_name}?`)) return;
+          const openingInput = document.getElementById(`stockOpening_${rowKey}`);
+          const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
+          if (openingInput && row.openingEditable) openingInput.value = '0';
+          if (secondaryInput) secondaryInput.value = '0';
+          await persistRow(row.openingEditable ? 0 : row.openingUnits, 0);
         };
       }
     });
