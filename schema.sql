@@ -113,9 +113,21 @@ select
 from sales s
 join stockist_mapping m on m.stockist_code = s.stockist_code
 cross join lateral (
+  -- If BEs exist, split among them. Otherwise fall back to ASM → RSM → ZM → VP.
   select emp_id, count(*) over () as n from (
-    values (m.be_emp_id_1), (m.be_emp_id_2), (m.be_emp_id_3)
-  ) as t(emp_id)
+    -- Case 1: at least one BE is assigned — use BE(s)
+    select unnest(array_remove(array[m.be_emp_id_1, m.be_emp_id_2, m.be_emp_id_3], null)) as emp_id
+    where coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is not null
+    union all
+    -- Case 2: no BE — fall back to lowest available level
+    select coalesce(
+      nullif(trim(m.asm_emp_id),''),
+      nullif(trim(m.rsm_emp_id),''),
+      nullif(trim(m.zm_emp_id),''),
+      nullif(trim(m.vp_emp_id),'')
+    ) as emp_id
+    where coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is null
+  ) t(emp_id)
   where emp_id is not null and emp_id <> ''
 ) be;
 
