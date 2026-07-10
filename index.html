@@ -1214,34 +1214,51 @@ async function handleEmployeeUpload(e){
     return;
   }
 
-  status.textContent = `Uploading ${rows.length} new employees…`;
+  // Build full employee list (excluding ADLA02 to avoid duplicate PK)
+  const allEmps = rows.map(r => ({
+    emp_id:         get(r,'emp_id').toString().trim(),
+    name:           get(r,'name').toString().trim(),
+    designation:    get(r,'designation').toString().trim(),
+    hq_code:        get(r,'hq_code').toString().trim(),
+    hq_name:        get(r,'hq_name').toString().trim(),
+    manager_emp_id: get(r,'manager_emp_id').toString().trim() || null,
+    state:          get(r,'state').toString().trim(),
+    region:         get(r,'region').toString().trim(),
+    is_admin:       get(r,'emp_id').toString().trim() === 'ADLA02'
+  })).filter(x => x.emp_id && x.emp_id !== 'ADLA02');
+
+  // PASS 1: Insert all employees with manager_emp_id = null to avoid FK violations
+  status.textContent = `Pass 1/2: Inserting ${allEmps.length} employees (no manager links yet)…`;
   const batchSize = 100;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize).map(r => ({
-      emp_id: get(r,'emp_id').toString().trim(),
-      name: get(r,'name').toString().trim(),
-      designation: get(r,'designation').toString().trim(),
-      hq_code: get(r,'hq_code').toString().trim(),
-      hq_name: get(r,'hq_name').toString().trim(),
-      manager_emp_id: get(r,'manager_emp_id').toString().trim() || null,
-      state: get(r,'state').toString().trim(),
-      region: get(r,'region').toString().trim(),
-      is_admin: get(r,'emp_id').toString().trim() === 'ADLA02'
-    }));
+  for (let i = 0; i < allEmps.length; i += batchSize) {
+    const batch = allEmps.slice(i, i + batchSize).map(r => ({ ...r, manager_emp_id: null }));
+    const { error: insError } = await sb.from('employees').insert(batch);
+    if (insError) {
+      status.textContent = `Pass 1 failed at row ${i}: ` + insError.message;
+      console.error('Pass 1 insert error:', insError);
+      return;
+    }
+    progBar.style.width = Math.round(((i + batch.length) / allEmps.length) * 40) + '%';
+  }
 
-    // Filter out ADLA02 if already present to prevent duplicate primary key violation
-    const filteredBatch = batch.filter(x => x.emp_id && x.emp_id !== 'ADLA02');
-
-    if (filteredBatch.length > 0) {
-      const { error: insError } = await sb.from('employees').insert(filteredBatch);
-      if (insError) {
-        status.textContent = "Failed to insert batch: " + insError.message;
+  // PASS 2: Update each employee's manager_emp_id
+  status.textContent = `Pass 2/2: Setting manager relationships…`;
+  const withManager = allEmps.filter(r => r.manager_emp_id);
+  for (let i = 0; i < withManager.length; i += batchSize) {
+    const batch = withManager.slice(i, i + batchSize);
+    for (const emp of batch) {
+      const { error: updErr } = await sb.from('employees')
+        .update({ manager_emp_id: emp.manager_emp_id })
+        .eq('emp_id', emp.emp_id);
+      if (updErr) {
+        status.textContent = `Pass 2 failed for ${emp.emp_id}: ` + updErr.message;
+        console.error('Pass 2 update error:', updErr);
         return;
       }
     }
-
-    progBar.style.width = Math.round(((i + batch.length) / rows.length) * 50) + "%";
+    progBar.style.width = (40 + Math.round(((i + batch.length) / withManager.length) * 35)) + '%';
   }
+
 
   status.textContent = `Initializing default employee passwords (to Employee ID)…`;
   // Set password for all loaded employees
