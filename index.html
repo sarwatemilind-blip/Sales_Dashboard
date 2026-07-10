@@ -137,7 +137,6 @@ const fmtNum = (n) => (n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
 const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
 const normalizeEmpId = (value) => (value || "").toString().trim().toUpperCase();
-const SPECIAL_ADMIN_IDS = new Set(['ADLA02', 'ADMIN01']);
 const displayHqName = (empId, hqName) => normalizeEmpId(empId) === 'ADLA02' ? 'Mumbai' : (hqName || "—");
 const scopeLabel = (emp) => {
   const hq = `${displayHqName(emp.emp_id, emp.hq_name)}${emp.hq_code ? ` [${emp.hq_code}]` : ''}`;
@@ -198,11 +197,11 @@ function renderLogin(errorMsg, mode = "employee"){
       renderLogin("Invalid Employee ID or password.");
       return;
     }
-    if (data[0].is_admin || normalizeEmpId(data[0].emp_id) === 'ADLA02') {
+    if (data[0].is_admin && normalizeEmpId(data[0].emp_id) !== 'ADLA02') {
       renderLogin("Please use the admin login for this account.");
       return;
     }
-    session = { ...data[0], hq_name: displayHqName(data[0].emp_id, data[0].hq_name) };
+    session = { ...data[0], is_admin: false, hq_name: displayHqName(data[0].emp_id, data[0].hq_name) };
     await loadDownline();
     renderShell('dashboard');
   };
@@ -213,12 +212,15 @@ function renderLogin(errorMsg, mode = "employee"){
     const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
     const account = !error && data && data.length > 0 ? data[0] : null;
     const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && password === DEFAULT_ADMIN.emp_id;
-    const specialAdmin = SPECIAL_ADMIN_IDS.has(emp_id);
-    if (!account && !fallbackAdmin && !specialAdmin) {
+    if (emp_id === 'ADLA02') {
+      renderLogin("That account is set up for employee login only.", "admin");
+      return;
+    }
+    if (!account && !fallbackAdmin) {
       renderLogin("Invalid admin ID or password.", "admin");
       return;
     }
-    if (account && !account.is_admin && !specialAdmin && emp_id !== DEFAULT_ADMIN.emp_id) {
+    if (account && !account.is_admin && emp_id !== DEFAULT_ADMIN.emp_id) {
       renderLogin("That account is not marked as admin.", "admin");
       return;
     }
@@ -724,6 +726,53 @@ async function loadDashboardData(){
       }
     }
 
+    lastDashboardData.beBrandDetail = beBrandGroups.flatMap(group => {
+      const head = group[0];
+      const total = group.reduce((acc, row) => {
+        acc.targetVal += row.targetVal || 0;
+        acc.achVal += row.achVal || 0;
+        acc.lastYearVal += row.lastYearVal || 0;
+        acc.targetUnit += row.targetUnit || 0;
+        acc.achUnit += row.achUnit || 0;
+        return acc;
+      }, { targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 });
+      const detailRows = group.map(row => {
+        const pct = row.targetVal > 0 ? (row.achVal / row.targetVal * 100) : null;
+        const g = row.lastYearVal > 0 ? ((row.achVal - row.lastYearVal) / row.lastYearVal * 100) : null;
+        return {
+          "BE Employee ID": row.emp_id,
+          "BE Name": row.emp_name,
+          "HQ": displayHqName(row.emp_id, row.hq),
+          "Region": row.region,
+          "Brand": row.brand,
+          "Category": getBrandCategory(row.brand),
+          "Target (Value)": row.targetVal,
+          "Achievement (Value)": row.achVal,
+          "% Achievement": pct !== null ? pct.toFixed(1) + "%" : "—",
+          "Target (Units)": row.targetUnit,
+          "Achievement (Units)": row.achUnit,
+          "Growth YoY": g !== null ? g.toFixed(1) + "%" : "—"
+        };
+      });
+      const totalPct = total.targetVal > 0 ? (total.achVal / total.targetVal * 100) : null;
+      const totalG = total.lastYearVal > 0 ? ((total.achVal - total.lastYearVal) / total.lastYearVal * 100) : null;
+      const totalRow = {
+        "BE Employee ID": head.emp_id,
+        "BE Name": `${head.emp_name} Total`,
+        "HQ": displayHqName(head.emp_id, head.hq),
+        "Region": head.region,
+        "Brand": "All brands",
+        "Category": "",
+        "Target (Value)": total.targetVal,
+        "Achievement (Value)": total.achVal,
+        "% Achievement": totalPct !== null ? totalPct.toFixed(1) + "%" : "—",
+        "Target (Units)": total.targetUnit,
+        "Achievement (Units)": total.achUnit,
+        "Growth YoY": totalG !== null ? totalG.toFixed(1) + "%" : "—"
+      };
+      return [...detailRows, totalRow];
+    });
+
     if (teamRows.length) {
       teamHtml = `
         <div class="section-title">BE-wise Category Performance — ${periodLabel} ${currentYear}</div>
@@ -977,8 +1026,8 @@ function downloadDashboardDataExcel() {
       XLSX.utils.book_append_sheet(wb, ws3, "BE Performance");
     }
     
-    if (lastDashboardData.beBrands && lastDashboardData.beBrands.length > 0) {
-      const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrands);
+    if (lastDashboardData.beBrandDetail && lastDashboardData.beBrandDetail.length > 0) {
+      const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandDetail);
       XLSX.utils.book_append_sheet(wb, ws4, "BE x Brand Detail");
     }
     
@@ -1432,7 +1481,7 @@ async function handleEmployeeUpload(e){
         manager_emp_id: get(adla02Row, 'manager_emp_id').toString().trim() || null,
         state: get(adla02Row, 'state').toString().trim(),
         region: get(adla02Row, 'region').toString().trim(),
-        is_admin: true
+        is_admin: false
       })
       .eq('emp_id', 'ADLA02');
     if (syncError) {
