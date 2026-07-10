@@ -114,6 +114,33 @@ create table if not exists stock_statements (
 );
 create index if not exists idx_stock_statements_scope_period on stock_statements(scope_emp_id, period_year, period_month);
 
+create table if not exists stock_statement_items (
+  id                bigserial primary key,
+  scope_emp_id      text not null,
+  period_year       int not null,
+  period_month      int not null,
+  stockist_code     text not null,
+  stockist_name     text,
+  product_code      text not null,
+  product_name      text,
+  brand             text,
+  opening_units     numeric,
+  primary_units     numeric,
+  primary_value     numeric,
+  sale_rate         numeric,
+  total_units       numeric,
+  secondary_units   numeric,
+  secondary_value   numeric,
+  closing_units     numeric,
+  closing_value     numeric,
+  updated_by        text,
+  uploaded_at       timestamptz default now(),
+  updated_at        timestamptz default now(),
+  unique (scope_emp_id, period_year, period_month, stockist_code, product_code)
+);
+create index if not exists idx_stock_statement_items_scope_period on stock_statement_items(scope_emp_id, period_year, period_month);
+create index if not exists idx_stock_statement_items_stockist on stock_statement_items(stockist_code);
+
 -- =============================================================
 -- VIEW: sales attributed to the correct ADLA employee via stockist mapping
 -- (Sales report's own MR code uses a different ID scheme than the
@@ -208,6 +235,7 @@ alter table sales enable row level security;
 alter table targets enable row level security;
 alter table stockist_mapping enable row level security;
 alter table stock_statements enable row level security;
+alter table stock_statement_items enable row level security;
 alter table product_clubbing enable row level security;
 
 create policy "read all employees" on employees for select using (true);
@@ -215,6 +243,7 @@ create policy "read all sales" on sales for select using (true);
 create policy "read all targets" on targets for select using (true);
 create policy "read all mapping" on stockist_mapping for select using (true);
 create policy "read all stock statements" on stock_statements for select using (true);
+create policy "read all stock statement items" on stock_statement_items for select using (true);
 create policy "read all clubbing" on product_clubbing for select using (true);
 -- inserts/updates happen only via the admin upload screen using the service-role
 -- key on a tiny server function, OR via the anon key if you accept the lower
@@ -224,6 +253,9 @@ create policy "delete sales (internal tool)" on sales for delete using (true);
 create policy "insert stock statements (internal tool)" on stock_statements for insert with check (true);
 create policy "update stock statements (internal tool)" on stock_statements for update using (true) with check (true);
 create policy "delete stock statements (internal tool)" on stock_statements for delete using (true);
+create policy "insert stock statement items (internal tool)" on stock_statement_items for insert with check (true);
+create policy "update stock statement items (internal tool)" on stock_statement_items for update using (true) with check (true);
+create policy "delete stock statement items (internal tool)" on stock_statement_items for delete using (true);
 create policy "insert employees (internal tool)" on employees for insert with check (true);
 create policy "update employees (internal tool)" on employees for update using (true) with check (true);
 create policy "delete employees (internal tool)" on employees for delete using (true);
