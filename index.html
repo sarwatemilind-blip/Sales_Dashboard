@@ -1201,12 +1201,36 @@ async function loadStockStatementData(){
     return allSales;
   }
 
+  async function fetchAllSalesHistory() {
+    let allSales = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb.from('sales')
+        .select('canonical_product_code, raw_product_code, raw_product_name, brand, quantity, amount')
+        .order('id', { ascending: true })
+        .range(from, from + 999);
+      if (error) {
+        throw error;
+      }
+      allSales = allSales.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+    return allSales;
+  }
+
   let currentSales = [];
   try {
     currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
+  }
+  let allSalesHistory = [];
+  try {
+    allSalesHistory = await fetchAllSalesHistory();
+  } catch (error) {
+    console.warn("Failed to load historical sales for product rate fallback:", error);
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
   const [currentSavedResp, prevSavedResp] = await Promise.all([
@@ -1236,7 +1260,17 @@ async function loadStockStatementData(){
   const prevSavedMap = new Map(prevSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
 
   const salesMap = new Map();
-  const productRateMap = new Map();
+  const currentProductRateMap = new Map();
+  const historicalProductRateMap = new Map();
+  allSalesHistory.forEach(r => {
+    const productKey = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
+    if (!productKey) return;
+    const stats = historicalProductRateMap.get(productKey) || { units: 0, value: 0, rate: 0 };
+    stats.units += parseFloat(r.quantity) || 0;
+    stats.value += parseFloat(r.amount) || 0;
+    stats.rate = stats.units > 0 ? (stats.value / stats.units) : stats.rate;
+    historicalProductRateMap.set(productKey, stats);
+  });
   currentSales.forEach(r => {
     const stockistCode = normalizeEmpId(r.stockist_code);
     const productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
@@ -1264,11 +1298,11 @@ async function loadStockStatementData(){
     item.sale_rate = item.primary_units > 0 ? (item.primary_value / item.primary_units) : item.sale_rate;
 
     if (productKey) {
-      const stats = productRateMap.get(productKey) || { units: 0, value: 0, rate: 0 };
+      const stats = currentProductRateMap.get(productKey) || { units: 0, value: 0, rate: 0 };
       stats.units += parseFloat(r.quantity) || 0;
       stats.value += parseFloat(r.amount) || 0;
       stats.rate = stats.units > 0 ? (stats.value / stats.units) : stats.rate;
-      productRateMap.set(productKey, stats);
+      currentProductRateMap.set(productKey, stats);
     }
   });
 
@@ -1287,11 +1321,14 @@ async function loadStockStatementData(){
         : (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : 0);
       const primaryUnits = sales ? sales.primary_units : 0;
       const primaryValue = sales ? sales.primary_value : 0;
-      const productRate = productRateMap.get(normalizeEmpId(product.product_code)) || null;
+      const productKey = normalizeEmpId(product.product_code);
+      const currentRate = currentProductRateMap.get(productKey) || null;
+      const historicalRate = historicalProductRateMap.get(productKey) || null;
       const saleRate = primaryUnits > 0
         ? (primaryValue / primaryUnits)
         : (
-          productRate?.rate
+          currentRate?.rate
+          || historicalRate?.rate
           || (saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0)
           || (prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0)
         );
