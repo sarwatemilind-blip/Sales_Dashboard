@@ -440,20 +440,76 @@ function isOcrNumericWord(wordText) {
   return /^-?\d+(?:\.\d+)?$/.test((wordText || '').trim());
 }
 
-function findIssueColumnX(pageData) {
+function buildLinesFromTextItems(items, getY, getX0, getX1, getText) {
+  const lines = [];
+  const tolerance = 4;
+  (items || []).forEach(item => {
+    const text = (getText ? getText(item) : item?.text || item?.str || '').toString().trim();
+    if (!text) return;
+    const x0 = Number.isFinite(getX0 ? getX0(item) : item?.x0) ? (getX0 ? getX0(item) : item.x0) : 0;
+    const x1 = Number.isFinite(getX1 ? getX1(item) : item?.x1) ? (getX1 ? getX1(item) : item.x1) : x0;
+    const y0 = Number.isFinite(getY ? getY(item) : item?.y) ? (getY ? getY(item) : item.y) : 0;
+    let line = lines.find(entry => Math.abs(entry.y - y0) <= tolerance);
+    if (!line) {
+      line = { y: y0, words: [] };
+      lines.push(line);
+    }
+    line.words.push({
+      text,
+      bbox: {
+        x0,
+        x1,
+        y0: y0 - 10,
+        y1: y0 + 10,
+      }
+    });
+  });
+  lines.forEach(line => {
+    line.words.sort((a, b) => (a.bbox?.x0 || 0) - (b.bbox?.x0 || 0));
+    line.text = line.words.map(word => word.text || '').join(' ').replace(/\s+/g, ' ').trim();
+    const xs = line.words.map(word => [word.bbox?.x0 || 0, word.bbox?.x1 || 0]).flat();
+    line.bbox = xs.length ? {
+      x0: Math.min(...xs),
+      x1: Math.max(...xs),
+      y0: line.y - 10,
+      y1: line.y + 10,
+    } : null;
+  });
+  return lines.sort((a, b) => b.y - a.y);
+}
+
+function buildLinesFromPdfTextItems(items) {
+  return buildLinesFromTextItems(
+    items,
+    item => (item && item.transform && item.transform[5] != null) ? item.transform[5] : 0,
+    item => (item && item.transform && item.transform[4] != null) ? item.transform[4] : 0,
+    item => ((item && item.transform && item.transform[4] != null) ? item.transform[4] : 0) + (item?.width || 0),
+    item => item?.str || ''
+  );
+}
+
+function getLineObjectsFromPageData(pageData) {
   const lines = [];
   (pageData?.blocks || []).forEach(block => {
     (block.paragraphs || []).forEach(paragraph => {
       (paragraph.lines || []).forEach(line => lines.push(line));
     });
   });
-  const headerLine = lines.find(line => /issue/i.test(line.text || '') && /qty/i.test(line.text || ''));
-  if (!headerLine) return null;
-  const issueWord = (headerLine.words || []).find(word => /issue/i.test(word.text || ''));
-  if (issueWord && issueWord.bbox) return (issueWord.bbox.x0 + issueWord.bbox.x1) / 2;
-  const qtyWord = (headerLine.words || []).find(word => /qty/i.test(word.text || ''));
-  if (qtyWord && qtyWord.bbox) return (qtyWord.bbox.x0 + qtyWord.bbox.x1) / 2;
-  if (headerLine.bbox) return (headerLine.bbox.x0 + headerLine.bbox.x1) / 2;
+  return lines;
+}
+
+function findIssueColumnX(lines) {
+  const issueLines = (lines || []).filter(line => /issue/i.test(line.text || ''));
+  if (!issueLines.length) return null;
+  const issueWords = issueLines.flatMap(line => (line.words || []).filter(word => /issue/i.test(word.text || '')));
+  if (issueWords.length > 0) {
+    const centers = issueWords
+      .map(word => ((word.bbox?.x0 || 0) + (word.bbox?.x1 || 0)) / 2)
+      .filter(Number.isFinite);
+    if (centers.length > 0) return centers.reduce((a, b) => a + b, 0) / centers.length;
+  }
+  const issueLine = issueLines.find(line => /qty|sales/i.test(line.text || '')) || issueLines[0];
+  if (issueLine?.bbox) return (issueLine.bbox.x0 + issueLine.bbox.x1) / 2;
   return null;
 }
 
@@ -490,16 +546,10 @@ function chooseIssueQtyFromLine(line, issueX) {
   return chosen ? chosen.text : null;
 }
 
-function extractStockRowsFromPageData(pageData, products) {
+function extractStockRowsFromLineObjects(lineItems, products) {
   const rows = [];
   const seen = new Set();
-  const issueX = findIssueColumnX(pageData);
-  const lineItems = [];
-  (pageData?.blocks || []).forEach(block => {
-    (block.paragraphs || []).forEach(paragraph => {
-      (paragraph.lines || []).forEach(line => lineItems.push(line));
-    });
-  });
+  const issueX = findIssueColumnX(lineItems);
 
   lineItems.forEach(line => {
     const lineText = getLineWordsText(line) || (line.text || '').replace(/\s+/g, ' ').trim();
@@ -544,6 +594,14 @@ function extractStockRowsFromPageData(pageData, products) {
     });
   });
   return rows;
+}
+
+function extractStockRowsFromPdfTextItems(items, products) {
+  return extractStockRowsFromLineObjects(buildLinesFromPdfTextItems(items), products);
+}
+
+function extractStockRowsFromPageData(pageData, products) {
+  return extractStockRowsFromLineObjects(getLineObjectsFromPageData(pageData), products);
 }
 
 function parseStockOcrText(text, products, pageData = null) {
@@ -746,6 +804,13 @@ async function scanStockOcrFile(file) {
         if (status) status.textContent = `Scanning ${file.name} - page ${pageNumber}/${pdf.numPages}...`;
         if (progress) progress.style.width = `${Math.round((pageNumber - 1) / pdf.numPages * 70) + 10}%`;
         const page = await pdf.getPage(pageNumber);
+        const textContent = await page.getTextContent();
+        const pdfRows = extractStockRowsFromPdfTextItems(textContent.items || [], products);
+        if (pdfRows.length) {
+          extractedRows.push(...pdfRows);
+          extractedText += `\n${(textContent.items || []).map(item => item.str || '').join(' ')}`;
+          continue;
+        }
         const viewport = page.getViewport({ scale: 2 });
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
