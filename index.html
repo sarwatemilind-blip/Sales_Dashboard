@@ -784,6 +784,7 @@ async function scanStockOcrFile(file) {
   const applyBtn = document.getElementById('stockOcrApplyBtn');
   const stockistSel = document.getElementById('stockOcrStockistSel');
   const products = getStockOcrProducts();
+  let ocrWorker = null;
   if (!products.length) {
     if (status) status.textContent = 'Load the stock statement first so OCR can map rows to products.';
     return;
@@ -794,6 +795,11 @@ async function scanStockOcrFile(file) {
   if (reviewWrap) reviewWrap.innerHTML = '<div class="muted">Scanning file...</div>';
   let extractedText = '';
   const extractedRows = [];
+  const getOcrWorker = async () => {
+    if (ocrWorker) return ocrWorker;
+    ocrWorker = await Tesseract.createWorker('eng');
+    return ocrWorker;
+  };
   try {
     if (/pdf/i.test(file.type) || file.name.toLowerCase().endsWith('.pdf')) {
       const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs');
@@ -818,13 +824,15 @@ async function scanStockOcrFile(file) {
         canvas.height = viewport.height;
         await page.render({ canvasContext: ctx, viewport }).promise;
         const dataUrl = canvas.toDataURL('image/png');
-        const result = await Tesseract.recognize(dataUrl, 'eng');
+        const worker = await getOcrWorker();
+        const result = await worker.recognize(dataUrl, {}, { blocks: true, tsv: true });
         extractedText += `\n${result.data.text || ''}`;
         extractedRows.push(...parseStockOcrText(result.data.text || '', products, result.data));
       }
     } else {
       const canvas = await renderImageToCanvas(file);
-      const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng');
+      const worker = await getOcrWorker();
+      const result = await worker.recognize(canvas.toDataURL('image/png'), {}, { blocks: true, tsv: true });
       extractedText = result.data.text || '';
       extractedRows.push(...parseStockOcrText(extractedText, products, result.data));
     }
@@ -843,6 +851,14 @@ async function scanStockOcrFile(file) {
     if (reviewWrap) reviewWrap.innerHTML = '';
     if (status) status.textContent = `OCR failed: ${error.message}`;
     if (progress) progress.style.width = '0%';
+  } finally {
+    if (ocrWorker) {
+      try {
+        await ocrWorker.terminate();
+      } catch (terminateError) {
+        console.warn('Failed to terminate OCR worker', terminateError);
+      }
+    }
   }
 }
 
