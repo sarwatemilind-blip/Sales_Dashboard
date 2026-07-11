@@ -439,6 +439,7 @@ function suggestOcrProduct(line, products) {
 function parseStockOcrText(text, products) {
   const skipPatterns = [
     /^page\s*\d+/i,
+    /^page\s+no\b/i,
     /^total\b/i,
     /^grand total\b/i,
     /^opening\b/i,
@@ -446,7 +447,16 @@ function parseStockOcrText(text, products) {
     /^primary\b/i,
     /^secondary\b/i,
     /^statement\b/i,
-    /^stock\b/i
+    /^stock\b/i,
+    /sales\s*&\s*stock\s*statement/i,
+    /\b(from|upto)\s*\d{1,2}\/\d{1,2}\/\d{4}\b/i,
+    /\baddress\b/i,
+    /\bphone\b/i,
+    /\bmobile\b/i,
+    /\bgst\b/i,
+    /\btax\b/i,
+    /\binvoice\b/i,
+    /\bbill\b/i
   ];
   const rows = [];
   const seen = new Set();
@@ -462,6 +472,14 @@ function parseStockOcrText(text, products) {
     const label = line.slice(0, labelEnd).trim();
     if (!label) return;
     const suggestion = suggestOcrProduct(label, products);
+    const normalizedLabel = normalizeEmpId(label);
+    const exactCodeMatch = products.some(product => normalizedLabel.includes(normalizeEmpId(product.product_code)));
+    const startsLikeProduct = products.some(product => {
+      const productLead = normalizeEmpId(product.product_name).split(/[^A-Z0-9]+/).find(Boolean);
+      return productLead && normalizedLabel.startsWith(productLead);
+    });
+    const acceptRow = suggestion.score >= 70 || (suggestion.score >= 45 && (exactCodeMatch || startsLikeProduct));
+    if (!acceptRow) return;
     const key = `${normalizeEmpId(label)}|${qty}|${suggestion.product ? suggestion.product.product_code : ''}`;
     if (seen.has(key)) return;
     seen.add(key);
