@@ -498,26 +498,47 @@ function getLineObjectsFromPageData(pageData) {
   return lines;
 }
 
-function findIssueColumnX(lines) {
-  const issueLines = (lines || []).filter(line => /issue/i.test(line.text || ''));
-  if (!issueLines.length) return null;
+function findIssueColumnInfo(lines) {
+  const allLines = Array.isArray(lines) ? lines : [];
+  const maxY = allLines.reduce((max, line) => Math.max(max, Number.isFinite(line?.y) ? line.y : (line?.bbox?.y1 || 0)), 0);
+  const headerCutoff = maxY > 0 ? maxY * 0.45 : null;
+  const issueLines = allLines
+    .filter(line => /issue/i.test(line.text || ''))
+    .filter(line => headerCutoff == null || (Number.isFinite(line?.y) ? line.y : (line?.bbox?.y0 || 0)) <= headerCutoff)
+    .sort((a, b) => (a.y || a.bbox?.y0 || 0) - (b.y || b.bbox?.y0 || 0));
+  if (!issueLines.length) return { issueX: null, nextX: null };
   const issueWords = issueLines.flatMap(line => (line.words || []).filter(word => /issue/i.test(word.text || '')));
+  let issueX = null;
   if (issueWords.length > 0) {
     const centers = issueWords
       .map(word => ((word.bbox?.x0 || 0) + (word.bbox?.x1 || 0)) / 2)
       .filter(Number.isFinite);
-    if (centers.length > 0) return centers.reduce((a, b) => a + b, 0) / centers.length;
+    if (centers.length > 0) issueX = centers.reduce((a, b) => a + b, 0) / centers.length;
   }
-  const issueLine = issueLines.find(line => /qty|sales/i.test(line.text || '')) || issueLines[0];
-  if (issueLine?.bbox) return (issueLine.bbox.x0 + issueLine.bbox.x1) / 2;
-  return null;
+  const issueLine = issueLines.find(line => /qty|sales|retm|expiry|closing/i.test(line.text || '')) || issueLines[0];
+  if (issueX == null && issueLine?.bbox) issueX = (issueLine.bbox.x0 + issueLine.bbox.x1) / 2;
+
+  const headerLine = issueLines.find(line => /qty|retm|expiry|closing/i.test(line.text || '')) || issueLines[0] || null;
+  let nextX = null;
+  if (headerLine) {
+    const headerWords = (headerLine.words || []).filter(word => /issue|qty|retm|expiry|closing/i.test(word.text || ''));
+    if (issueX != null && headerWords.length > 0) {
+      const issueIdx = headerWords.findIndex(word => /issue/i.test(word.text || ''));
+      const rightWords = issueIdx >= 0 ? headerWords.slice(issueIdx + 1) : headerWords;
+      const nextWord = rightWords.find(word => /retm|expiry|closing/i.test(word.text || '')) || rightWords.find(word => /qty/i.test(word.text || ''));
+      if (nextWord?.bbox) nextX = (nextWord.bbox.x0 + nextWord.bbox.x1) / 2;
+    }
+  }
+  return { issueX, nextX };
 }
 
 function getLineWordsText(line) {
   return (line.words || []).map(word => word.text || '').join(' ').replace(/\s+/g, ' ').trim();
 }
 
-function chooseIssueQtyFromLine(line, issueX) {
+function chooseIssueQtyFromLine(line, issueInfo) {
+  const issueX = issueInfo?.issueX ?? null;
+  const nextX = issueInfo?.nextX ?? null;
   const numericWords = (line.words || [])
     .filter(word => isOcrNumericWord(word.text))
     .map(word => ({
@@ -529,13 +550,19 @@ function chooseIssueQtyFromLine(line, issueX) {
     .sort((a, b) => a.cx - b.cx);
   if (!numericWords.length) return null;
 
-  const rightSide = issueX == null
+  const middleFallback = numericWords[Math.floor(numericWords.length / 2)] || numericWords[0];
+  const bandLeft = issueX == null ? null : issueX - 80;
+  const bandRight = nextX == null ? null : nextX - 20;
+  const issueBand = issueX == null
     ? numericWords
-    : numericWords.filter(item => item.cx >= (issueX - 20));
-  const pool = rightSide.length ? rightSide : numericWords;
+    : numericWords.filter(item => item.cx >= (bandLeft ?? issueX - 80) && (bandRight == null || item.cx <= bandRight));
+  const pool = issueBand.length ? issueBand : numericWords;
   const chosen = pool.reduce((best, item) => {
     if (!best) return item;
     if (issueX == null) {
+      const itemGap = Math.abs(item.cx - middleFallback.cx);
+      const bestGap = Math.abs(best.cx - middleFallback.cx);
+      if (itemGap !== bestGap) return itemGap < bestGap ? item : best;
       return item.cx < best.cx ? item : best;
     }
     const itemGap = Math.abs(item.cx - issueX);
@@ -543,19 +570,19 @@ function chooseIssueQtyFromLine(line, issueX) {
     if (itemGap !== bestGap) return itemGap < bestGap ? item : best;
     return item.cx < best.cx ? item : best;
   }, null);
-  return chosen ? chosen.text : null;
+  return chosen ? chosen.text : (middleFallback ? middleFallback.text : null);
 }
 
 function extractStockRowsFromLineObjects(lineItems, products) {
   const rows = [];
   const seen = new Set();
-  const issueX = findIssueColumnX(lineItems);
+  const issueInfo = findIssueColumnInfo(lineItems);
 
   lineItems.forEach(line => {
     const lineText = getLineWordsText(line) || (line.text || '').replace(/\s+/g, ' ').trim();
     if (!lineText || lineText.length < 3) return;
     if (/issue\s*qty/i.test(lineText) || /opening|closing|total|statement|page\s*no/i.test(lineText)) return;
-    const qtyText = chooseIssueQtyFromLine(line, issueX);
+    const qtyText = chooseIssueQtyFromLine(line, issueInfo);
     if (!qtyText) return;
     const qty = parseFloat(qtyText);
     if (!Number.isFinite(qty)) return;
