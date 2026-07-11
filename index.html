@@ -470,11 +470,14 @@ function parseStockOcrText(text, products) {
       return {
         raw: match[0],
         index: start,
+        isDecimal: match[0].includes('.'),
         isInteger: !match[0].includes('.'),
         isPackLike: /^(?:'S|S|MG|GM|ML|L|TAB|TABS|CAP|PCS|NOS|NO)\b/.test(suffix),
       };
     });
-    const qtyToken = numberMatches.find(tok => tok.isInteger && !tok.isPackLike);
+    const firstDecimalIdx = numberMatches.findIndex(tok => tok.isDecimal);
+    const searchTokens = firstDecimalIdx >= 0 ? numberMatches.slice(firstDecimalIdx + 1) : numberMatches;
+    const qtyToken = searchTokens.find(tok => tok.isInteger && !tok.isPackLike);
     if (!qtyToken) return;
     const qty = parseFloat(qtyToken.raw);
     if (!Number.isFinite(qty)) return;
