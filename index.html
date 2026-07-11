@@ -463,12 +463,22 @@ function parseStockOcrText(text, products) {
   (text || '').split(/\r?\n/).map(line => line.replace(/\s+/g, ' ').trim()).forEach(line => {
     if (!line || line.length < 3) return;
     if (skipPatterns.some(rx => rx.test(line))) return;
-    const numberMatches = [...line.matchAll(/-?\d+(?:\.\d+)?/g)];
-    if (numberMatches.length === 0) return;
-    const qtyMatch = numberMatches.length >= 2 ? numberMatches[numberMatches.length - 2] : numberMatches[numberMatches.length - 1];
-    const qty = parseFloat(qtyMatch[0]);
+    const numberMatches = [...line.matchAll(/-?\d+(?:\.\d+)?/g)].map(match => {
+      const start = match.index || 0;
+      const end = start + match[0].length;
+      const suffix = line.slice(end).trimStart().toUpperCase();
+      return {
+        raw: match[0],
+        index: start,
+        isInteger: !match[0].includes('.'),
+        isPackLike: /^(?:'S|S|MG|GM|ML|L|TAB|TABS|CAP|PCS|NOS|NO)\b/.test(suffix),
+      };
+    });
+    const qtyToken = numberMatches.find(tok => tok.isInteger && !tok.isPackLike);
+    if (!qtyToken) return;
+    const qty = parseFloat(qtyToken.raw);
     if (!Number.isFinite(qty)) return;
-    const labelEnd = qtyMatch.index != null ? qtyMatch.index : line.length;
+    const labelEnd = qtyToken.index != null ? qtyToken.index : line.length;
     const label = line.slice(0, labelEnd).trim();
     if (!label) return;
     const suggestion = suggestOcrProduct(label, products);
