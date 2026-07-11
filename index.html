@@ -453,11 +453,13 @@ function parseStockOcrText(text, products) {
   (text || '').split(/\r?\n/).map(line => line.replace(/\s+/g, ' ').trim()).forEach(line => {
     if (!line || line.length < 3) return;
     if (skipPatterns.some(rx => rx.test(line))) return;
-    const qtyMatch = line.match(/(-?\d+(?:\.\d+)?)\s*$/);
-    if (!qtyMatch) return;
-    const qty = parseFloat(qtyMatch[1]);
+    const numberMatches = [...line.matchAll(/-?\d+(?:\.\d+)?/g)];
+    if (numberMatches.length === 0) return;
+    const qtyMatch = numberMatches.length >= 2 ? numberMatches[numberMatches.length - 2] : numberMatches[numberMatches.length - 1];
+    const qty = parseFloat(qtyMatch[0]);
     if (!Number.isFinite(qty)) return;
-    const label = line.slice(0, qtyMatch.index).trim();
+    const labelEnd = qtyMatch.index != null ? qtyMatch.index : line.length;
+    const label = line.slice(0, labelEnd).trim();
     if (!label) return;
     const suggestion = suggestOcrProduct(label, products);
     const key = `${normalizeEmpId(label)}|${qty}|${suggestion.product ? suggestion.product.product_code : ''}`;
