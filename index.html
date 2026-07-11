@@ -6,6 +6,7 @@
 <title>Adonis Field Force — Sales Dashboard</title>
 <script src="supabase.js"></script>
 <script src="xlsx.full.min.js"></script>
+<script src="node_modules/tesseract.js/dist/tesseract.min.js"></script>
 <style>
   :root{
     --bg:#0f172a; --panel:#fff; --ink:#0f172a; --muted:#64748b;
@@ -120,6 +121,27 @@
   .stock-table .stock-input:disabled{background:#f8fafc;color:#475569;cursor:not-allowed;}
   .stock-total-row td{background:linear-gradient(90deg, rgba(37,99,235,.06), rgba(249,115,22,.08)); font-weight:700;}
   .stock-note{font-size:12px;color:var(--muted);margin-top:8px;}
+  .ocr-modal{
+    position:fixed; inset:0; background:rgba(15,23,42,.62); z-index:3000;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .ocr-modal.open{display:flex;}
+  .ocr-panel{
+    width:min(1160px,100%); max-height:calc(100vh - 40px); overflow:auto;
+    background:#fff; border-radius:18px; box-shadow:0 24px 70px rgba(15,23,42,.35);
+    border:1px solid rgba(37,99,235,.12); padding:20px;
+  }
+  .ocr-panel-head{display:flex; gap:14px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;}
+  .ocr-status{min-height:18px;}
+  .ocr-review-table th{position:sticky; top:0; z-index:1;}
+  .ocr-review-table td, .ocr-review-table th{vertical-align:top;}
+  .ocr-review-table .ocr-line{font-size:12px; color:var(--muted); max-width:320px; word-break:break-word;}
+  .ocr-review-table select, .ocr-review-table input{margin:0; width:100%;}
+  .ocr-review-table .score-chip{
+    display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700;
+    background:#eef2ff; color:var(--brand-dk);
+  }
+  .ocr-review-table .score-chip.low{background:#fef2f2;color:var(--bad);}
   @media (max-width: 900px){
     .login-grid{grid-template-columns:1fr;}
   }
@@ -333,6 +355,7 @@ const prevFiscalPeriod = (year, month) => month === 1 ? { year: year - 1, month:
 const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${stockistCode}||${productCode}`);
+let stockOcrState = { file: null, rows: [], stockistCode: '', stockistName: '', status: '' };
 
 function getActiveScopeIdsForSelection() {
   if (selectedEmpId === 'overall') return [...downlineIds];
@@ -370,6 +393,331 @@ function buildScopeOptionsHTML(selectedValue) {
   }
   return html;
 }
+
+function getStockOcrProducts() {
+  const seen = new Map();
+  (lastStockStatementData.rows || []).forEach(row => {
+    if (!seen.has(row.product_code)) {
+      seen.set(row.product_code, {
+        product_code: row.product_code,
+        product_name: row.product_name,
+        brand: row.brand || row.product_name
+      });
+    }
+  });
+  return [...seen.values()].sort((a, b) => a.product_name.localeCompare(b.product_name));
+}
+
+function scoreOcrProductLine(line, product) {
+  const normalizedLine = normalizeEmpId(line).replace(/[^A-Z0-9]+/g, '');
+  const normalizedName = normalizeEmpId(product.product_name).replace(/[^A-Z0-9]+/g, '');
+  const normalizedCode = normalizeEmpId(product.product_code).replace(/[^A-Z0-9]+/g, '');
+  if (!normalizedLine) return 0;
+  if (normalizedLine === normalizedName || normalizedLine === normalizedCode) return 100;
+  let score = 0;
+  if (normalizedName && normalizedLine.includes(normalizedName)) score = Math.max(score, 90);
+  if (normalizedCode && normalizedLine.includes(normalizedCode)) score = Math.max(score, 85);
+  const tokens = (product.product_name || '').toUpperCase().split(/[^A-Z0-9]+/).filter(t => t.length > 1);
+  let hits = 0;
+  tokens.forEach(token => {
+    if (normalizedLine.includes(token)) hits += 1;
+  });
+  if (hits > 0) score = Math.max(score, 45 + hits * 10);
+  return score;
+}
+
+function suggestOcrProduct(line, products) {
+  let best = { score: 0, product: null };
+  products.forEach(product => {
+    const score = scoreOcrProductLine(line, product);
+    if (score > best.score) best = { score, product };
+  });
+  return best;
+}
+
+function parseStockOcrText(text, products) {
+  const skipPatterns = [
+    /^page\s*\d+/i,
+    /^total\b/i,
+    /^grand total\b/i,
+    /^opening\b/i,
+    /^closing\b/i,
+    /^primary\b/i,
+    /^secondary\b/i,
+    /^statement\b/i,
+    /^stock\b/i
+  ];
+  const rows = [];
+  const seen = new Set();
+  (text || '').split(/\r?\n/).map(line => line.replace(/\s+/g, ' ').trim()).forEach(line => {
+    if (!line || line.length < 3) return;
+    if (skipPatterns.some(rx => rx.test(line))) return;
+    const qtyMatch = line.match(/(-?\d+(?:\.\d+)?)\s*$/);
+    if (!qtyMatch) return;
+    const qty = parseFloat(qtyMatch[1]);
+    if (!Number.isFinite(qty)) return;
+    const label = line.slice(0, qtyMatch.index).trim();
+    if (!label) return;
+    const suggestion = suggestOcrProduct(label, products);
+    const key = `${normalizeEmpId(label)}|${qty}|${suggestion.product ? suggestion.product.product_code : ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({
+      id: `ocr_${rows.length + 1}`,
+      rawText: line,
+      label,
+      qty,
+      suggestedProductCode: suggestion.product ? suggestion.product.product_code : '',
+      suggestedProductName: suggestion.product ? suggestion.product.product_name : '',
+      score: suggestion.score
+    });
+  });
+  return rows;
+}
+
+function renderStockOcrReview(rows, products) {
+  const wrap = document.getElementById('stockOcrReviewWrap');
+  const applyBtn = document.getElementById('stockOcrApplyBtn');
+  if (!wrap) return;
+  if (!rows || rows.length === 0) {
+    wrap.innerHTML = `<div class="muted" style="padding:12px 0;">No product-like rows were found. Try a cleaner PDF or image, then scan again.</div>`;
+    if (applyBtn) applyBtn.disabled = true;
+    return;
+  }
+  const productOptions = [`<option value="">Select product</option>`].concat(products.map(p => `<option value="${p.product_code}">${p.product_name} (${p.product_code})</option>`)).join('');
+  wrap.innerHTML = `
+    <table class="ocr-review-table" style="width:100%; min-width:960px;">
+      <thead>
+        <tr>
+          <th style="width:34%;">OCR Text</th>
+          <th style="width:16%;" class="num">Qty</th>
+          <th style="width:14%;">Score</th>
+          <th style="width:36%;">Map To Product</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr data-ocr-row-id="${row.id}">
+            <td>
+              <div class="ocr-line">${row.rawText}</div>
+              <div class="small">Suggested: ${row.suggestedProductName || 'No clear match'}</div>
+            </td>
+            <td class="num">
+              <input class="ocr-qty" type="number" step="0.01" min="0" value="${row.qty}" />
+            </td>
+            <td>
+              <span class="score-chip ${row.score < 60 ? 'low' : ''}">${row.score}%</span>
+            </td>
+            <td>
+              <select class="ocr-product">${productOptions}</select>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('tr[data-ocr-row-id]').forEach(tr => {
+    const rowId = tr.getAttribute('data-ocr-row-id');
+    const row = rows.find(r => r.id === rowId);
+    const productSelect = tr.querySelector('.ocr-product');
+    if (row && productSelect) productSelect.value = row.suggestedProductCode || '';
+  });
+  if (applyBtn) applyBtn.disabled = false;
+}
+
+function openStockOcrModal() {
+  const modal = document.getElementById('stockOcrModal');
+  const stockistSel = document.getElementById('stockOcrStockistSel');
+  const fileInput = document.getElementById('stockOcrFile');
+  const status = document.getElementById('stockOcrStatus');
+  const progress = document.getElementById('stockOcrProgress');
+  if (!modal || !stockistSel || !fileInput || !status || !progress) return;
+  const stockists = (lastStockStatementData.groups || []).map(g => ({ stockist_code: g.stockist_code, stockist_name: g.stockist_name }));
+  stockistSel.innerHTML = stockists.map(s => `<option value="${s.stockist_code}">${s.stockist_name} (${s.stockist_code})</option>`).join('');
+  stockistSel.value = stockistSel.value || (stockists[0] ? stockists[0].stockist_code : '');
+  stockOcrState = { file: null, rows: [], stockistCode: stockistSel.value || '', stockistName: stockistSel.options[stockistSel.selectedIndex]?.textContent || '', status: '' };
+  status.textContent = 'Choose a file, then scan it to preview the mapped rows.';
+  progress.style.width = '0%';
+  const wrap = document.getElementById('stockOcrReviewWrap');
+  if (wrap) wrap.innerHTML = '';
+  const applyBtn = document.getElementById('stockOcrApplyBtn');
+  if (applyBtn) applyBtn.disabled = true;
+  fileInput.value = '';
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeStockOcrModal() {
+  const modal = document.getElementById('stockOcrModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+async function renderImageToCanvas(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function scanStockOcrFile(file) {
+  if (!file) return;
+  const status = document.getElementById('stockOcrStatus');
+  const progress = document.getElementById('stockOcrProgress');
+  const reviewWrap = document.getElementById('stockOcrReviewWrap');
+  const applyBtn = document.getElementById('stockOcrApplyBtn');
+  const stockistSel = document.getElementById('stockOcrStockistSel');
+  const products = getStockOcrProducts();
+  if (!products.length) {
+    if (status) status.textContent = 'Load the stock statement first so OCR can map rows to products.';
+    return;
+  }
+  if (status) status.textContent = `Scanning ${file.name}...`;
+  if (progress) progress.style.width = '8%';
+  if (applyBtn) applyBtn.disabled = true;
+  if (reviewWrap) reviewWrap.innerHTML = '<div class="muted">Scanning file...</div>';
+  let extractedText = '';
+  try {
+    if (/pdf/i.test(file.type) || file.name.toLowerCase().endsWith('.pdf')) {
+      const pdfjsLib = await import('./node_modules/pdfjs-dist/build/pdf.mjs');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = './node_modules/pdfjs-dist/build/pdf.worker.mjs';
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        if (status) status.textContent = `Scanning ${file.name} - page ${pageNumber}/${pdf.numPages}...`;
+        if (progress) progress.style.width = `${Math.round((pageNumber - 1) / pdf.numPages * 70) + 10}%`;
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        const result = await Tesseract.recognize(dataUrl, 'eng', {
+          workerPath: './node_modules/tesseract.js/dist/worker.min.js',
+          corePath: './node_modules/tesseract.js-core'
+        });
+        extractedText += `\n${result.data.text || ''}`;
+      }
+    } else {
+      const canvas = await renderImageToCanvas(file);
+      const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng', {
+        workerPath: './node_modules/tesseract.js/dist/worker.min.js',
+        corePath: './node_modules/tesseract.js-core'
+      });
+      extractedText = result.data.text || '';
+    }
+    const rows = parseStockOcrText(extractedText, products);
+    stockOcrState = {
+      ...stockOcrState,
+      file,
+      rows,
+      stockistCode: stockistSel ? stockistSel.value : '',
+      stockistName: stockistSel && stockistSel.selectedOptions[0] ? stockistSel.selectedOptions[0].textContent : ''
+    };
+    renderStockOcrReview(rows, products);
+    if (status) status.textContent = rows.length ? `Found ${rows.length} candidate rows. Review the mapping and then apply.` : 'No candidate product rows were found in the file.';
+    if (progress) progress.style.width = '100%';
+  } catch (error) {
+    if (reviewWrap) reviewWrap.innerHTML = '';
+    if (status) status.textContent = `OCR failed: ${error.message}`;
+    if (progress) progress.style.width = '0%';
+  }
+}
+
+async function applyStockOcrReview() {
+  const modal = document.getElementById('stockOcrModal');
+  const status = document.getElementById('stockOcrStatus');
+  const progress = document.getElementById('stockOcrProgress');
+  const stockistSel = document.getElementById('stockOcrStockistSel');
+  const rows = Array.from(document.querySelectorAll('#stockOcrReviewWrap tr[data-ocr-row-id]')).map(tr => ({
+    rowId: tr.getAttribute('data-ocr-row-id'),
+    qty: parseFloat(tr.querySelector('.ocr-qty')?.value || '0') || 0,
+    productCode: tr.querySelector('.ocr-product')?.value || ''
+  })).filter(r => r.qty > 0 && r.productCode);
+  if (!rows.length) {
+    if (status) status.textContent = 'No mapped rows to apply.';
+    return;
+  }
+  const scopeKey = selectedEmpId || 'overall';
+  const targetYear = currentYear;
+  const targetMonth = currentMonth;
+  const selectedStockist = stockistSel ? stockistSel.value : '';
+  if (!selectedStockist) {
+    if (status) status.textContent = 'Please choose a stockist before applying OCR values.';
+    return;
+  }
+  const rowMap = new Map((lastStockStatementData.rows || []).map(row => [`${normalizeEmpId(row.stockist_code)}|${normalizeEmpId(row.product_code)}`, row]));
+  const grouped = new Map();
+  rows.forEach(r => {
+    const key = `${normalizeEmpId(selectedStockist)}|${normalizeEmpId(r.productCode)}`;
+    grouped.set(key, (grouped.get(key) || 0) + r.qty);
+  });
+  if (status) status.textContent = 'Applying reviewed rows...';
+  if (progress) progress.style.width = '20%';
+  let applied = 0;
+  for (const [key, qty] of grouped.entries()) {
+    const row = rowMap.get(key);
+    if (!row) continue;
+    const openingInput = document.getElementById(`stockOpening_${row.key}`);
+    const secondaryInput = document.getElementById(`stockSecondary_${row.key}`);
+    const openingUnits = row.openingEditable ? parseFloat(openingInput?.value) : row.openingUnits;
+    if (row.openingEditable && !Number.isFinite(openingUnits)) {
+      if (status) status.textContent = `Please enter the opening stock for ${row.stockist_name} before applying OCR values.`;
+      return;
+    }
+    const payload = {
+      scope_emp_id: scopeKey,
+      period_year: targetYear,
+      period_month: targetMonth,
+      stockist_code: row.stockist_code,
+      stockist_name: row.stockist_name,
+      product_code: row.product_code,
+      product_name: row.product_name,
+      brand: row.brand,
+      opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
+      primary_units: row.primaryUnits,
+      primary_value: row.primaryValue,
+      sale_rate: row.saleRate,
+      total_units: row.totalUnits,
+      secondary_units: qty,
+      secondary_value: qty * row.saleRate,
+      closing_units: row.totalUnits - qty,
+      closing_value: (row.totalUnits - qty) * row.saleRate,
+      updated_by: session.emp_id,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+    if (error) {
+      if (status) status.textContent = `Failed to apply OCR values: ${error.message}`;
+      return;
+    }
+    applied += 1;
+    if (secondaryInput) secondaryInput.value = String(qty);
+    if (progress) progress.style.width = `${20 + Math.min(applied / grouped.size, 1) * 70}%`;
+  }
+  if (status) status.textContent = `Applied ${applied} reviewed rows.`;
+  if (progress) progress.style.width = '100%';
+  closeStockOcrModal();
+  await loadStockStatementData();
+}
+
+window.openStockOcrModal = openStockOcrModal;
+window.closeStockOcrModal = closeStockOcrModal;
+window.scanStockOcrFile = scanStockOcrFile;
+window.applyStockOcrReview = applyStockOcrReview;
 
 async function renderDashboard(){
   const main = document.getElementById("main");
@@ -1092,12 +1440,36 @@ async function renderStockStatement(){
       </select>
       <span class="pill" id="stockScopePill">Loading...</span>
       <button id="stockDownloadBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">Download Excel</button>
+      <button id="stockOcrBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">OCR Import</button>
       <button id="stockRefreshBtn" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Refresh</button>
     </div>
     <div class="stock-shell">
       <div class="section-title" style="margin-top:0;">Stock & Sales Statement</div>
-      <p class="small">Opening stock is entered once for the first month in the chain. Primary sales are pulled automatically from uploaded sales data. Secondary stock is entered each month, and closing rolls forward to the next month.</p>
+      <p class="small">Opening stock is entered once for the first month in the chain. Primary sales are pulled automatically from uploaded sales data. Secondary stock is entered each month, and closing rolls forward to the next month. You can also import secondary sales from a PDF, JPEG, or PNG using OCR Import and review the mapping before saving.</p>
       <div id="stockBody"><p class="muted">Loading...</p></div>
+    </div>
+    <div id="stockOcrModal" class="ocr-modal" aria-hidden="true">
+      <div class="ocr-panel">
+        <div class="ocr-panel-head">
+          <div>
+            <div class="section-title" style="margin-top:0;">OCR Import & Review</div>
+            <p class="small">Upload a PDF, JPEG, or PNG statement. We will read the lines, let you map them to products, then save the secondary units after review.</p>
+          </div>
+          <button id="stockOcrCloseBtn" class="btn-ghost" type="button" style="width:auto;padding:8px 12px;">Close</button>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <select id="stockOcrStockistSel" style="min-width:280px;"></select>
+          <button id="stockOcrPickBtn" class="btn-ghost" type="button" style="width:auto;padding:8px 12px;">Choose File</button>
+          <button id="stockOcrScanBtn" class="btn-primary" type="button" style="width:auto;padding:8px 16px;">Scan File</button>
+          <input id="stockOcrFile" type="file" accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf" style="display:none;" />
+        </div>
+        <div class="progress" style="margin-top:14px;"><div id="stockOcrProgress"></div></div>
+        <div id="stockOcrStatus" class="small ocr-status">Choose a file to begin.</div>
+        <div id="stockOcrReviewWrap" style="margin-top:14px; overflow-x:auto;"></div>
+        <div class="row" style="margin-top:14px; justify-content:flex-end;">
+          <button id="stockOcrApplyBtn" class="btn-primary" type="button" style="width:auto;padding:10px 16px;" disabled>Apply & Save</button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -1125,6 +1497,26 @@ async function renderStockStatement(){
   };
   document.getElementById("stockRefreshBtn").onclick = () => loadStockStatementData();
   document.getElementById("stockDownloadBtn").onclick = downloadStockStatementExcel;
+  document.getElementById("stockOcrBtn").onclick = openStockOcrModal;
+  document.getElementById("stockOcrCloseBtn").onclick = closeStockOcrModal;
+  document.getElementById("stockOcrPickBtn").onclick = () => document.getElementById("stockOcrFile")?.click();
+  document.getElementById("stockOcrFile").onchange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      stockOcrState.file = file;
+      const status = document.getElementById("stockOcrStatus");
+      if (status) status.textContent = `Selected ${file.name}. Click Scan File to begin OCR.`;
+    }
+  };
+  document.getElementById("stockOcrScanBtn").onclick = async () => {
+    const file = document.getElementById("stockOcrFile")?.files?.[0] || stockOcrState.file;
+    await scanStockOcrFile(file);
+  };
+  document.getElementById("stockOcrApplyBtn").onclick = applyStockOcrReview;
+  document.getElementById("stockOcrStockistSel").onchange = (e) => {
+    stockOcrState.stockistCode = e.target.value;
+    stockOcrState.stockistName = e.target.selectedOptions[0]?.textContent || '';
+  };
 
   if (scopePill) {
     scopePill.textContent = `${getActiveScopeIdsForSelection().length} employee${getActiveScopeIdsForSelection().length > 1 ? 's' : ''} in scope`;
@@ -1383,7 +1775,8 @@ async function loadStockStatementData(){
     scopeEmpId: scopeKey,
     year: targetYear,
     month: targetMonth,
-    grandTotals: { ...grandTotals, saleRate: grandSaleRate, stockist_count: groups.length }
+    grandTotals: { ...grandTotals, saleRate: grandSaleRate, stockist_count: groups.length },
+    context: { scopeKey, targetYear, targetMonth }
   };
 
   if (rows.length === 0) {
