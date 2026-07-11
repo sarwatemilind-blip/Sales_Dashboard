@@ -436,7 +436,117 @@ function suggestOcrProduct(line, products) {
   return best;
 }
 
-function parseStockOcrText(text, products) {
+function isOcrNumericWord(wordText) {
+  return /^-?\d+(?:\.\d+)?$/.test((wordText || '').trim());
+}
+
+function findIssueColumnX(pageData) {
+  const lines = [];
+  (pageData?.blocks || []).forEach(block => {
+    (block.paragraphs || []).forEach(paragraph => {
+      (paragraph.lines || []).forEach(line => lines.push(line));
+    });
+  });
+  const headerLine = lines.find(line => /issue/i.test(line.text || '') && /qty/i.test(line.text || ''));
+  if (!headerLine) return null;
+  const issueWord = (headerLine.words || []).find(word => /issue/i.test(word.text || ''));
+  if (issueWord && issueWord.bbox) return (issueWord.bbox.x0 + issueWord.bbox.x1) / 2;
+  const qtyWord = (headerLine.words || []).find(word => /qty/i.test(word.text || ''));
+  if (qtyWord && qtyWord.bbox) return (qtyWord.bbox.x0 + qtyWord.bbox.x1) / 2;
+  if (headerLine.bbox) return (headerLine.bbox.x0 + headerLine.bbox.x1) / 2;
+  return null;
+}
+
+function getLineWordsText(line) {
+  return (line.words || []).map(word => word.text || '').join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function chooseIssueQtyFromLine(line, issueX) {
+  const numericWords = (line.words || [])
+    .filter(word => isOcrNumericWord(word.text))
+    .map(word => ({
+      word,
+      text: word.text.trim(),
+      cx: word.bbox ? ((word.bbox.x0 + word.bbox.x1) / 2) : 0,
+      width: word.bbox ? Math.abs(word.bbox.x1 - word.bbox.x0) : 0
+    }))
+    .sort((a, b) => a.cx - b.cx);
+  if (!numericWords.length) return null;
+
+  const rightSide = issueX == null
+    ? numericWords
+    : numericWords.filter(item => item.cx >= (issueX - 20));
+  const pool = rightSide.length ? rightSide : numericWords;
+  const chosen = pool.reduce((best, item) => {
+    if (!best) return item;
+    if (issueX == null) {
+      return item.cx < best.cx ? item : best;
+    }
+    const itemGap = Math.abs(item.cx - issueX);
+    const bestGap = Math.abs(best.cx - issueX);
+    if (itemGap !== bestGap) return itemGap < bestGap ? item : best;
+    return item.cx < best.cx ? item : best;
+  }, null);
+  return chosen ? chosen.text : null;
+}
+
+function extractStockRowsFromPageData(pageData, products) {
+  const rows = [];
+  const seen = new Set();
+  const issueX = findIssueColumnX(pageData);
+  const lineItems = [];
+  (pageData?.blocks || []).forEach(block => {
+    (block.paragraphs || []).forEach(paragraph => {
+      (paragraph.lines || []).forEach(line => lineItems.push(line));
+    });
+  });
+
+  lineItems.forEach(line => {
+    const lineText = getLineWordsText(line) || (line.text || '').replace(/\s+/g, ' ').trim();
+    if (!lineText || lineText.length < 3) return;
+    if (/issue\s*qty/i.test(lineText) || /opening|closing|total|statement|page\s*no/i.test(lineText)) return;
+    const qtyText = chooseIssueQtyFromLine(line, issueX);
+    if (!qtyText) return;
+    const qty = parseFloat(qtyText);
+    if (!Number.isFinite(qty)) return;
+
+    const numericWords = (line.words || []).filter(word => isOcrNumericWord(word.text));
+    const qtyWord = numericWords.find(word => (word.text || '').trim() === qtyText);
+    const labelWords = (line.words || [])
+      .filter(word => !isOcrNumericWord(word.text))
+      .filter(word => {
+        if (!qtyWord || !word.bbox || !qtyWord.bbox) return true;
+        return (word.bbox.x1 || 0) < ((qtyWord.bbox.x0 || 0) - 8);
+      })
+      .map(word => word.text || '')
+      .filter(Boolean);
+    const label = labelWords.join(' ').replace(/\s+/g, ' ').trim() || lineText;
+    const suggestion = suggestOcrProduct(label, products);
+    const normalizedLabel = normalizeEmpId(label);
+    const exactCodeMatch = products.some(product => normalizedLabel.includes(normalizeEmpId(product.product_code)));
+    const startsLikeProduct = products.some(product => {
+      const productLead = normalizeEmpId(product.product_name).split(/[^A-Z0-9]+/).find(Boolean);
+      return productLead && normalizedLabel.startsWith(productLead);
+    });
+    const acceptRow = suggestion.score >= 70 || (suggestion.score >= 45 && (exactCodeMatch || startsLikeProduct));
+    if (!acceptRow) return;
+    const key = `${normalizeEmpId(label)}|${qty}|${suggestion.product ? suggestion.product.product_code : ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({
+      id: `ocr_${rows.length + 1}`,
+      rawText: lineText,
+      label,
+      qty,
+      suggestedProductCode: suggestion.product ? suggestion.product.product_code : '',
+      suggestedProductName: suggestion.product ? suggestion.product.product_name : '',
+      score: suggestion.score
+    });
+  });
+  return rows;
+}
+
+function parseStockOcrText(text, products, pageData = null) {
   const skipPatterns = [
     /^page\s*\d+/i,
     /^page\s+no\b/i,
@@ -460,6 +570,9 @@ function parseStockOcrText(text, products) {
   ];
   const rows = [];
   const seen = new Set();
+  if (pageData) {
+    return extractStockRowsFromPageData(pageData, products);
+  }
   (text || '').split(/\r?\n/).map(line => line.replace(/\s+/g, ' ').trim()).forEach(line => {
     if (!line || line.length < 3) return;
     if (skipPatterns.some(rx => rx.test(line))) return;
@@ -622,6 +735,7 @@ async function scanStockOcrFile(file) {
   if (applyBtn) applyBtn.disabled = true;
   if (reviewWrap) reviewWrap.innerHTML = '<div class="muted">Scanning file...</div>';
   let extractedText = '';
+  const extractedRows = [];
   try {
     if (/pdf/i.test(file.type) || file.name.toLowerCase().endsWith('.pdf')) {
       const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs');
@@ -641,13 +755,15 @@ async function scanStockOcrFile(file) {
         const dataUrl = canvas.toDataURL('image/png');
         const result = await Tesseract.recognize(dataUrl, 'eng');
         extractedText += `\n${result.data.text || ''}`;
+        extractedRows.push(...parseStockOcrText(result.data.text || '', products, result.data));
       }
     } else {
       const canvas = await renderImageToCanvas(file);
       const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng');
       extractedText = result.data.text || '';
+      extractedRows.push(...parseStockOcrText(extractedText, products, result.data));
     }
-    const rows = parseStockOcrText(extractedText, products);
+    const rows = extractedRows.length ? extractedRows : parseStockOcrText(extractedText, products);
     stockOcrState = {
       ...stockOcrState,
       file,
