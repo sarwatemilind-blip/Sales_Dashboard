@@ -930,11 +930,9 @@ async function applyStockOcrReview() {
       const row = rowMap.get(key);
       if (!row) continue;
       const openingInput = document.getElementById(`stockOpening_${row.key}`);
-      const openingUnits = row.openingEditable ? parseFloat(openingInput?.value) : row.openingUnits;
-      if (row.openingEditable && !Number.isFinite(openingUnits)) {
-        if (status) status.textContent = `Please enter the opening stock for ${row.stockist_name} before applying OCR values.`;
-        return;
-      }
+      const openingUnits = row.openingEditable
+        ? (Number.isFinite(parseFloat(openingInput?.value)) ? parseFloat(openingInput?.value) : row.openingUnits)
+        : row.openingUnits;
       payloads.push({
         scope_emp_id: scopeKey,
         period_year: targetYear,
