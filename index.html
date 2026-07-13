@@ -2111,6 +2111,9 @@ async function loadStockStatementData(){
         );
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
+      const openingValue = prevSaved && prevSaved.closing_value != null
+        ? (parseFloat(prevSaved.closing_value) || 0)
+        : 0;
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
@@ -2123,6 +2126,7 @@ async function loadStockStatementData(){
         product_name: product.product_name,
         brand: product.brand,
         openingUnits,
+        openingValue,
         primaryUnits,
         primaryValue,
         saleRate,
@@ -2144,6 +2148,7 @@ async function loadStockStatementData(){
 
   const grandTotals = rows.reduce((acc, row) => {
     acc.openingUnits += row.openingUnits || 0;
+    acc.openingValue += row.openingValue || 0;
     acc.primaryUnits += row.primaryUnits || 0;
     acc.primaryValue += row.primaryValue || 0;
     acc.secondaryUnits += row.secondaryUnits || 0;
@@ -2151,7 +2156,7 @@ async function loadStockStatementData(){
     acc.closingUnits += row.closingUnits || 0;
     acc.closingValue += row.closingValue || 0;
     return acc;
-  }, { openingUnits: 0, primaryUnits: 0, primaryValue: 0, secondaryUnits: 0, secondaryValue: 0, closingUnits: 0, closingValue: 0 });
+  }, { openingUnits: 0, openingValue: 0, primaryUnits: 0, primaryValue: 0, secondaryUnits: 0, secondaryValue: 0, closingUnits: 0, closingValue: 0 });
 
   const grandSaleRate = grandTotals.primaryUnits > 0 ? grandTotals.primaryValue / grandTotals.primaryUnits : 0;
   lastStockStatementData = {
@@ -2173,7 +2178,7 @@ async function loadStockStatementData(){
   body.innerHTML = `
     <div class="small" style="margin-bottom:12px;">Scope: <b>${scopeName}</b> | Month: <b>${headerMonth}</b></div>
     <div class="kpi-row" style="margin-bottom:16px;">
-      <div class="kpi"><div class="label">Opening Value</div><div class="value">${fmtCurrency(grandTotals.openingUnits * grandSaleRate)}</div><div class="sub">${fmtNum(grandTotals.openingUnits)} units</div></div>
+      <div class="kpi"><div class="label">Opening Value</div><div class="value">${fmtCurrency(grandTotals.openingValue)}</div><div class="sub">${fmtNum(grandTotals.openingUnits)} units</div></div>
       <div class="kpi"><div class="label">Primary Sales Value</div><div class="value">${fmtCurrency(grandTotals.primaryValue)}</div><div class="sub">${fmtNum(grandTotals.primaryUnits)} units</div></div>
       <div class="kpi"><div class="label">Secondary Value</div><div class="value">${fmtCurrency(grandTotals.secondaryValue)}</div><div class="sub">${fmtNum(grandTotals.secondaryUnits)} units</div></div>
       <div class="kpi"><div class="label">Closing Value</div><div class="value">${fmtCurrency(grandTotals.closingValue)}</div><div class="sub">${fmtNum(grandTotals.closingUnits)} units</div></div>
@@ -2311,6 +2316,7 @@ function downloadStockStatementExcel(){
       "Product Name": row.product_name,
       "Brand": row.brand,
       "Opening Units": row.openingUnits,
+      "Opening Value": row.openingValue || 0,
       "Primary Units": row.primaryUnits,
       "Primary Value": row.primaryValue,
       "Sale Rate": row.saleRate,
@@ -2326,7 +2332,7 @@ function downloadStockStatementExcel(){
       const ws2 = XLSX.utils.json_to_sheet([{
         "Scope": lastStockStatementData.scopeEmpId,
         "Month": `${monthLabel(lastStockStatementData.month)} ${lastStockStatementData.year + (lastStockStatementData.month >= 10 ? 1 : 0)}`,
-        "Opening Value": lastStockStatementData.grandTotals.openingUnits * (lastStockStatementData.grandTotals.saleRate || 0),
+        "Opening Value": lastStockStatementData.grandTotals.openingValue || 0,
         "Primary Value": lastStockStatementData.grandTotals.primaryValue,
         "Secondary Value": lastStockStatementData.grandTotals.secondaryValue,
         "Closing Value": lastStockStatementData.grandTotals.closingValue
