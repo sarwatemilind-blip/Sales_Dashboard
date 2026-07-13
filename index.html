@@ -2109,7 +2109,9 @@ async function loadStockStatementData(){
         prevSaved && prevSaved.closing_units != null ? (parseFloat(prevSaved.closing_units) || 0) : null,
         prevAnySaved && prevAnySaved.closing_units != null ? (parseFloat(prevAnySaved.closing_units) || 0) : null
       ].filter(v => v != null);
-      const openingUnits = openingCandidates.find(v => v > 0) ?? openingCandidates[0] ?? 0;
+      const openingUnits = isInitialMonth
+        ? 0
+        : (openingCandidates.find(v => v > 0) ?? openingCandidates[0] ?? 0);
       const primaryUnits = sales ? sales.primary_units : 0;
       const primaryValue = sales ? sales.primary_value : 0;
       const productKey = normalizeEmpId(product.product_code);
@@ -2132,9 +2134,11 @@ async function loadStockStatementData(){
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
       const openingEditable = isInitialMonth;
-      const openingDisplay = openingEditable
-        ? (saved || prevSaved || prevAnySaved ? openingUnits : '')
-        : openingUnits;
+      const openingDisplay = isInitialMonth
+        ? ''
+        : (openingEditable
+          ? (saved || prevSaved || prevAnySaved ? openingUnits : '')
+          : openingUnits);
       return {
         stockist_code: stockistCode,
         stockist_name: (sales?.stockist_name || saved?.stockist_name || stockistName || '').toString().trim(),
