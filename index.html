@@ -419,6 +419,11 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     stockist_code: row.stockist_code,
     product_code: row.product_code,
     opening_units: row.closing_units,
+    opening_value: row.closing_value,
+    sale_rate: row.sale_rate,
+    total_units: row.closing_units,
+    closing_units: row.closing_units,
+    closing_value: row.closing_value,
     updated_by: session.emp_id,
     updated_at: new Date().toISOString()
   }));
@@ -2109,9 +2114,11 @@ async function loadStockStatementData(){
       const saleRate = savedRate || prevSavedRate || marketRate;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
-      const openingValue = prevSaved && prevSaved.closing_value != null
-        ? (parseFloat(prevSaved.closing_value) || 0)
-        : 0;
+      const openingValue = saved && saved.opening_value != null
+        ? (parseFloat(saved.opening_value) || 0)
+        : (prevSaved && prevSaved.closing_value != null
+          ? (parseFloat(prevSaved.closing_value) || 0)
+          : 0);
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
