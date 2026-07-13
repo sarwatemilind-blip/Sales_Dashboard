@@ -2131,7 +2131,7 @@ async function loadStockStatementData(){
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
-      const openingEditable = isInitialMonth && !prevSaved;
+      const openingEditable = isInitialMonth;
       const openingDisplay = openingEditable
         ? (saved || prevSaved || prevAnySaved ? openingUnits : '')
         : openingUnits;
