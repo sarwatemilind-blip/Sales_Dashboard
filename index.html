@@ -2245,7 +2245,7 @@ async function loadStockStatementData(){
                   <div class="row-sub">${row.brand || row.product_code}</div>
                 </td>
                 <td class="num">
-                  <input id="stockOpening_${rowKey}" class="stock-input" type="number" step="0.01" min="0" value="${row.openingDisplay}" ${row.openingEditable ? '' : 'disabled'} />
+                  <input id="stockOpening_${rowKey}" class="stock-input" type="number" step="0.01" min="0" autocomplete="off" value="${row.openingDisplay}" ${row.openingEditable ? '' : 'disabled'} />
                 </td>
                 <td class="num">${fmtNum(row.primaryUnits)}</td>
                 <td class="num">${fmtCurrency(row.primaryValue)}</td>
@@ -2301,6 +2301,14 @@ async function loadStockStatementData(){
   groups.forEach(group => {
     group.rows.forEach(row => {
       const rowKey = statementDomKey(row.stockist_code, row.product_code);
+      if (isInitialMonth) {
+        const openingInput = document.getElementById(`stockOpening_${rowKey}`);
+        if (openingInput) {
+          openingInput.value = '';
+          openingInput.defaultValue = '';
+          openingInput.removeAttribute('value');
+        }
+      }
       const btn = document.getElementById(`stockSave_${rowKey}`);
       const delBtn = document.getElementById(`stockDelete_${rowKey}`);
       if (btn) {
