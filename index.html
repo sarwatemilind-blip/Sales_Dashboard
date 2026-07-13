@@ -891,80 +891,92 @@ async function scanStockOcrFile(file) {
 }
 
 async function applyStockOcrReview() {
-  const modal = document.getElementById('stockOcrModal');
   const status = document.getElementById('stockOcrStatus');
   const progress = document.getElementById('stockOcrProgress');
   const stockistSel = document.getElementById('stockOcrStockistSel');
-  const rows = Array.from(document.querySelectorAll('#stockOcrReviewWrap tr[data-ocr-row-id]')).map(tr => ({
-    rowId: tr.getAttribute('data-ocr-row-id'),
-    qty: parseFloat(tr.querySelector('.ocr-qty')?.value || '0') || 0,
-    productCode: tr.querySelector('.ocr-product')?.value || ''
-  })).filter(r => r.qty > 0 && r.productCode);
-  if (!rows.length) {
-    if (status) status.textContent = 'No mapped rows to apply.';
-    return;
-  }
-  const scopeKey = selectedEmpId || 'overall';
-  const targetYear = currentYear;
-  const targetMonth = currentMonth;
-  const selectedStockist = stockistSel ? stockistSel.value : '';
-  if (!selectedStockist) {
-    if (status) status.textContent = 'Please choose a stockist before applying OCR values.';
-    return;
-  }
-  const rowMap = new Map((lastStockStatementData.rows || []).map(row => [`${normalizeEmpId(row.stockist_code)}|${normalizeEmpId(row.product_code)}`, row]));
-  const grouped = new Map();
-  rows.forEach(r => {
-    const key = `${normalizeEmpId(selectedStockist)}|${normalizeEmpId(r.productCode)}`;
-    grouped.set(key, (grouped.get(key) || 0) + r.qty);
-  });
-  if (status) status.textContent = 'Applying reviewed rows...';
-  if (progress) progress.style.width = '20%';
-  let applied = 0;
-  for (const [key, qty] of grouped.entries()) {
-    const row = rowMap.get(key);
-    if (!row) continue;
-    const openingInput = document.getElementById(`stockOpening_${row.key}`);
-    const secondaryInput = document.getElementById(`stockSecondary_${row.key}`);
-    const openingUnits = row.openingEditable ? parseFloat(openingInput?.value) : row.openingUnits;
-    if (row.openingEditable && !Number.isFinite(openingUnits)) {
-      if (status) status.textContent = `Please enter the opening stock for ${row.stockist_name} before applying OCR values.`;
+  try {
+    const rows = Array.from(document.querySelectorAll('#stockOcrReviewWrap tr[data-ocr-row-id]')).map(tr => ({
+      rowId: tr.getAttribute('data-ocr-row-id'),
+      qty: parseFloat(tr.querySelector('.ocr-qty')?.value || '0') || 0,
+      productCode: tr.querySelector('.ocr-product')?.value || ''
+    })).filter(r => r.qty > 0 && r.productCode);
+    if (!rows.length) {
+      if (status) status.textContent = 'No mapped rows to apply.';
       return;
     }
-    const payload = {
-      scope_emp_id: scopeKey,
-      period_year: targetYear,
-      period_month: targetMonth,
-      stockist_code: row.stockist_code,
-      stockist_name: row.stockist_name,
-      product_code: row.product_code,
-      product_name: row.product_name,
-      brand: row.brand,
-      opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
-      primary_units: row.primaryUnits,
-      primary_value: row.primaryValue,
-      sale_rate: row.saleRate,
-      total_units: row.totalUnits,
-      secondary_units: qty,
-      secondary_value: qty * row.saleRate,
-      closing_units: row.totalUnits - qty,
-      closing_value: (row.totalUnits - qty) * row.saleRate,
-      updated_by: session.emp_id,
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+    const scopeKey = selectedEmpId || 'overall';
+    const targetYear = currentYear;
+    const targetMonth = currentMonth;
+    const selectedStockist = stockistSel ? stockistSel.value : '';
+    if (!selectedStockist) {
+      if (status) status.textContent = 'Please choose a stockist before applying OCR values.';
+      return;
+    }
+
+    const rowMap = new Map((lastStockStatementData.rows || []).map(row => [`${normalizeEmpId(row.stockist_code)}|${normalizeEmpId(row.product_code)}`, row]));
+    const payloads = [];
+    const grouped = new Map();
+    rows.forEach(r => {
+      const key = `${normalizeEmpId(selectedStockist)}|${normalizeEmpId(r.productCode)}`;
+      grouped.set(key, (grouped.get(key) || 0) + r.qty);
+    });
+
+    if (status) status.textContent = 'Preparing reviewed rows...';
+    if (progress) progress.style.width = '20%';
+
+    for (const [key, qty] of grouped.entries()) {
+      const row = rowMap.get(key);
+      if (!row) continue;
+      const openingInput = document.getElementById(`stockOpening_${row.key}`);
+      const openingUnits = row.openingEditable ? parseFloat(openingInput?.value) : row.openingUnits;
+      if (row.openingEditable && !Number.isFinite(openingUnits)) {
+        if (status) status.textContent = `Please enter the opening stock for ${row.stockist_name} before applying OCR values.`;
+        return;
+      }
+      payloads.push({
+        scope_emp_id: scopeKey,
+        period_year: targetYear,
+        period_month: targetMonth,
+        stockist_code: row.stockist_code,
+        stockist_name: row.stockist_name,
+        product_code: row.product_code,
+        product_name: row.product_name,
+        brand: row.brand,
+        opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
+        primary_units: row.primaryUnits,
+        primary_value: row.primaryValue,
+        sale_rate: row.saleRate,
+        total_units: row.totalUnits,
+        secondary_units: qty,
+        secondary_value: qty * row.saleRate,
+        closing_units: row.totalUnits - qty,
+        closing_value: (row.totalUnits - qty) * row.saleRate,
+        updated_by: session.emp_id,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    if (!payloads.length) {
+      if (status) status.textContent = 'No matching stock rows were found to save.';
+      return;
+    }
+
+    if (status) status.textContent = `Saving ${payloads.length} reviewed rows...`;
+    if (progress) progress.style.width = '45%';
+    const { error } = await sb.from('stock_statement_items').upsert(payloads, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
     if (error) {
       if (status) status.textContent = `Failed to apply OCR values: ${error.message}`;
       return;
     }
-    applied += 1;
-    if (secondaryInput) secondaryInput.value = String(qty);
-    if (progress) progress.style.width = `${20 + Math.min(applied / grouped.size, 1) * 70}%`;
+    if (status) status.textContent = `Applied ${payloads.length} reviewed rows.`;
+    if (progress) progress.style.width = '100%';
+    closeStockOcrModal();
+    await loadStockStatementData();
+  } catch (error) {
+    if (status) status.textContent = `Could not save OCR values: ${error.message}`;
+    if (progress) progress.style.width = '0%';
+    console.error('applyStockOcrReview failed', error);
   }
-  if (status) status.textContent = `Applied ${applied} reviewed rows.`;
-  if (progress) progress.style.width = '100%';
-  closeStockOcrModal();
-  await loadStockStatementData();
 }
 
 window.openStockOcrModal = openStockOcrModal;
