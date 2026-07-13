@@ -190,6 +190,7 @@ const DEFAULT_ADMIN = {
   manager_emp_id: null,
   is_admin: true
 };
+const DEFAULT_ADMIN_PASSWORD = 'Admin@2026!';
 
 // ---------------- LOGIN ----------------
 function renderLogin(errorMsg, mode = "employee"){
@@ -225,11 +226,11 @@ function renderLogin(errorMsg, mode = "employee"){
             <label>Admin ID</label>
             <input id="adminEmpId" autocomplete="username" placeholder="e.g. ADMIN01" required />
             <label>Password</label>
-            <input id="adminPassword" type="password" autocomplete="current-password" required />
+            <input id="adminPassword" type="password" autocomplete="current-password" placeholder="e.g. Admin@2026!" required />
             <button class="btn-primary" type="submit" style="background:linear-gradient(90deg,#f97316,#ef4444);">Admin Sign in</button>
           </form>
         </div>
-        <p class="small" style="margin-top:14px;">Default employee password = your Employee ID, unless your admin has changed it. Admin password can be set separately.</p>
+        <p class="small" style="margin-top:14px;">Default employee password = your Employee ID, unless your admin has changed it. Admin password uses a separate admin-only value.</p>
       </div>
     </div>`;
   document.getElementById("employeeLoginForm").onsubmit = async (e) => {
@@ -255,7 +256,7 @@ function renderLogin(errorMsg, mode = "employee"){
     const password = document.getElementById("adminPassword").value;
     const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
     const account = !error && data && data.length > 0 ? data[0] : null;
-    const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && password === DEFAULT_ADMIN.emp_id;
+    const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && password === DEFAULT_ADMIN_PASSWORD;
     if (emp_id === 'ADLA02') {
       renderLogin("That account is set up for employee login only.", "admin");
       return;
