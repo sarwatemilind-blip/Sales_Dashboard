@@ -1705,6 +1705,7 @@ async function renderStockStatement(){
         <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26</option>
       </select>
       <span class="pill" id="stockScopePill">Loading...</span>
+      <button id="stockSaveAllBtn" class="btn-primary" style="padding:8px 12px;font-size:13px;width:auto;">Save All Entries</button>
       <button id="stockDownloadBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">Download Excel</button>
       <button id="stockOcrBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">OCR Import</button>
       <button id="stockRefreshBtn" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Refresh</button>
@@ -1770,6 +1771,9 @@ async function renderStockStatement(){
     loadStockStatementData();
   };
   document.getElementById("stockRefreshBtn").onclick = () => loadStockStatementData();
+  document.getElementById("stockSaveAllBtn").onclick = async () => {
+    await saveAllStockStatementEntries();
+  };
   document.getElementById("stockDownloadBtn").onclick = downloadStockStatementExcel;
   document.getElementById("stockOcrBtn").onclick = openStockOcrModal;
   document.getElementById("stockOcrCloseBtn").onclick = closeStockOcrModal;
@@ -2064,6 +2068,58 @@ async function loadStockStatementData(){
 
   const rows = groups.flatMap(g => g.rows);
 
+  const saveAllStockStatementEntries = async () => {
+    const payloads = [];
+    for (const row of rows) {
+      const rowKey = statementDomKey(row.stockist_code, row.product_code);
+      const openingInput = document.getElementById(`stockOpening_${rowKey}`);
+      const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
+      const openingRaw = row.openingEditable ? (openingInput?.value ?? '').trim() : '';
+      const secondaryRaw = (secondaryInput?.value ?? '').trim();
+      const hasOpeningEntry = row.openingEditable && openingRaw !== '';
+      const hasSecondaryEntry = secondaryRaw !== '';
+      if (!hasOpeningEntry && !hasSecondaryEntry && !row.saved) continue;
+      const openingUnits = row.openingEditable
+        ? (openingRaw !== '' ? (parseFloat(openingRaw) || 0) : row.openingUnits)
+        : row.openingUnits;
+      const secondaryUnits = secondaryRaw !== ''
+        ? (parseFloat(secondaryRaw) || 0)
+        : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
+      payloads.push({
+        scope_emp_id: scopeKey,
+        period_year: targetYear,
+        period_month: targetMonth,
+        stockist_code: row.stockist_code,
+        stockist_name: row.stockist_name,
+        product_code: row.product_code,
+        product_name: row.product_name,
+        brand: row.brand,
+        opening_units: Number.isFinite(openingUnits) ? openingUnits : row.openingUnits,
+        primary_units: row.primaryUnits,
+        primary_value: row.primaryValue,
+        sale_rate: row.saleRate,
+        total_units: row.totalUnits,
+        secondary_units: secondaryUnits,
+        secondary_value: secondaryUnits * row.saleRate,
+        closing_units: row.totalUnits - secondaryUnits,
+        closing_value: (row.totalUnits - secondaryUnits) * row.saleRate,
+        updated_by: session.emp_id,
+        updated_at: new Date().toISOString()
+      });
+    }
+    if (!payloads.length) {
+      alert('Please enter at least one opening or secondary value before saving.');
+      return false;
+    }
+    const { error } = await sb.from('stock_statement_items').upsert(payloads, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+    if (error) {
+      alert('Failed to save statement: ' + error.message);
+      return false;
+    }
+    await loadStockStatementData();
+    return true;
+  };
+
   const grandTotals = rows.reduce((acc, row) => {
     acc.openingUnits += row.openingUnits || 0;
     acc.primaryUnits += row.primaryUnits || 0;
@@ -2200,47 +2256,9 @@ async function loadStockStatementData(){
       const rowKey = statementDomKey(row.stockist_code, row.product_code);
       const btn = document.getElementById(`stockSave_${rowKey}`);
       const delBtn = document.getElementById(`stockDelete_${rowKey}`);
-      const persistRow = async (nextOpeningUnits, nextSecondaryUnits) => {
-        const payload = {
-          scope_emp_id: scopeKey,
-          period_year: targetYear,
-          period_month: targetMonth,
-          stockist_code: row.stockist_code,
-          stockist_name: row.stockist_name,
-          product_code: row.product_code,
-          product_name: row.product_name,
-          brand: row.brand,
-          opening_units: Number.isFinite(nextOpeningUnits) ? nextOpeningUnits : row.openingUnits,
-          primary_units: row.primaryUnits,
-          primary_value: row.primaryValue,
-          sale_rate: row.saleRate,
-          total_units: row.totalUnits,
-          secondary_units: Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0,
-          secondary_value: (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0) * row.saleRate,
-          closing_units: row.totalUnits - (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0),
-          closing_value: (row.totalUnits - (Number.isFinite(nextSecondaryUnits) ? nextSecondaryUnits : 0)) * row.saleRate,
-          updated_by: session.emp_id,
-          updated_at: new Date().toISOString()
-        };
-        const { error } = await sb.from('stock_statement_items').upsert(payload, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-        if (error) {
-          alert("Failed to save statement: " + error.message);
-          return false;
-        }
-        await loadStockStatementData();
-        return true;
-      };
       if (btn) {
         btn.onclick = async () => {
-          const openingInput = document.getElementById(`stockOpening_${rowKey}`);
-          const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
-          const openingUnits = row.openingEditable ? parseFloat(openingInput.value) : row.openingUnits;
-          const secondaryUnits = parseFloat(secondaryInput.value);
-          if (row.openingEditable && !Number.isFinite(openingUnits)) {
-            alert("Please enter the opening stock units for the first statement month.");
-            return;
-          }
-          await persistRow(openingUnits, secondaryUnits);
+          await saveAllStockStatementEntries();
         };
       }
       if (delBtn) {
@@ -2250,7 +2268,7 @@ async function loadStockStatementData(){
           const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
           if (openingInput && row.openingEditable) openingInput.value = '0';
           if (secondaryInput) secondaryInput.value = '0';
-          await persistRow(row.openingEditable ? 0 : row.openingUnits, 0);
+          await saveAllStockStatementEntries();
         };
       }
     });
