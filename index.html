@@ -374,9 +374,6 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
     const openingRaw = row.openingEditable ? (openingInput?.value ?? '').trim() : '';
     const secondaryRaw = (secondaryInput?.value ?? '').trim();
-    const hasOpeningEntry = row.openingEditable && openingRaw !== '';
-    const hasSecondaryEntry = secondaryRaw !== '';
-    if (!hasOpeningEntry && !hasSecondaryEntry && !row.saved) continue;
     const openingUnits = row.openingEditable
       ? (openingRaw !== '' ? (parseFloat(openingRaw) || 0) : row.openingUnits)
       : row.openingUnits;
@@ -406,7 +403,7 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     });
   }
   if (!payloads.length) {
-    if (!silent) alert('Please enter at least one opening or secondary value before saving.');
+    if (!silent) alert('Nothing to save.');
     return false;
   }
   const { error } = await sb.from('stock_statement_items').upsert(payloads, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
