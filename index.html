@@ -2011,7 +2011,7 @@ async function loadStockStatementData(){
     console.warn("Failed to load historical sales for product rate fallback:", error);
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
-  const [currentSavedResp, prevSavedResp] = await Promise.all([
+  const [currentSavedResp, prevSavedResp, prevSavedAnyResp] = await Promise.all([
     sb.from('stock_statement_items')
       .select('*')
       .eq('scope_emp_id', scopeKey)
@@ -2020,6 +2020,10 @@ async function loadStockStatementData(){
     sb.from('stock_statement_items')
       .select('*')
       .eq('scope_emp_id', scopeKey)
+      .eq('period_year', prevPeriod.year)
+      .eq('period_month', prevPeriod.month),
+    sb.from('stock_statement_items')
+      .select('*')
       .eq('period_year', prevPeriod.year)
       .eq('period_month', prevPeriod.month)
   ]);
@@ -2034,8 +2038,10 @@ async function loadStockStatementData(){
 
   const currentSavedRows = currentSavedResp.data || [];
   const prevSavedRows = prevSavedResp.data || [];
+  const prevSavedAnyRows = prevSavedAnyResp.data || [];
   const currentSavedMap = new Map(currentSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
   const prevSavedMap = new Map(prevSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
+  const prevSavedAnyMap = new Map(prevSavedAnyRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
 
   const salesMap = new Map();
   const currentProductRateMap = new Map();
@@ -2097,9 +2103,13 @@ async function loadStockStatementData(){
       const sales = salesMap.get(key) || null;
       const saved = currentSavedMap.get(key) || null;
       const prevSaved = prevSavedMap.get(key) || null;
-      const openingUnits = prevSaved && prevSaved.closing_units != null
-        ? (parseFloat(prevSaved.closing_units) || 0)
-        : (saved && saved.opening_units != null ? parseFloat(saved.opening_units) || 0 : 0);
+      const prevAnySaved = prevSavedAnyMap.get(key) || null;
+      const openingCandidates = [
+        saved && saved.opening_units != null ? (parseFloat(saved.opening_units) || 0) : null,
+        prevSaved && prevSaved.closing_units != null ? (parseFloat(prevSaved.closing_units) || 0) : null,
+        prevAnySaved && prevAnySaved.closing_units != null ? (parseFloat(prevAnySaved.closing_units) || 0) : null
+      ].filter(v => v != null);
+      const openingUnits = openingCandidates.find(v => v > 0) ?? openingCandidates[0] ?? 0;
       const primaryUnits = sales ? sales.primary_units : 0;
       const primaryValue = sales ? sales.primary_value : 0;
       const productKey = normalizeEmpId(product.product_code);
@@ -2123,7 +2133,7 @@ async function loadStockStatementData(){
       const closingValue = closingUnits * saleRate;
       const openingEditable = isInitialMonth && !prevSaved;
       const openingDisplay = openingEditable
-        ? (saved || prevSaved ? openingUnits : '')
+        ? (saved || prevSaved || prevAnySaved ? openingUnits : '')
         : openingUnits;
       return {
         stockist_code: stockistCode,
