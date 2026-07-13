@@ -350,6 +350,7 @@ if (currentYear < 2025 || currentYear > 2030) {
 }
 let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd'
 let selectedEmpId = 'overall';
+let selectedStockistCode = 'all';
 let lastDashboardData = { kpis: [], brands: [], team: [] };
 let lastStockStatementData = { rows: [], scopeEmpId: 'overall', year: currentYear, month: currentMonth, grandTotals: null };
 
@@ -767,7 +768,8 @@ function openStockOcrModal() {
   if (!modal || !stockistSel || !fileInput || !status || !progress) return;
   const stockists = (lastStockStatementData.groups || []).map(g => ({ stockist_code: g.stockist_code, stockist_name: g.stockist_name }));
   stockistSel.innerHTML = stockists.map(s => `<option value="${s.stockist_code}">${s.stockist_name} (${s.stockist_code})</option>`).join('');
-  stockistSel.value = stockistSel.value || (stockists[0] ? stockists[0].stockist_code : '');
+  const preferredStockist = stockists.find(s => normalizeEmpId(s.stockist_code) === normalizeEmpId(selectedStockistCode)) || stockists[0] || null;
+  stockistSel.value = preferredStockist ? preferredStockist.stockist_code : '';
   stockOcrState = { file: null, rows: [], stockistCode: stockistSel.value || '', stockistName: stockistSel.options[stockistSel.selectedIndex]?.textContent || '', status: '' };
   status.textContent = 'Choose a file, then scan it to preview the mapped rows.';
   progress.style.width = '0%';
@@ -1698,6 +1700,7 @@ async function renderStockStatement(){
   main.innerHTML = `
     <div class="toolbar">
       <select id="stockScopeSel" style="margin-right:10px; display:${session.designation === 'BE' ? 'none' : 'inline-block'}; max-width:360px;"></select>
+      <select id="stockStockistSel" style="margin-right:10px; display:none; max-width:360px;"></select>
       <select id="stockMonthSel" style="margin-right:10px;"></select>
       <select id="stockYearSel" style="margin-right:10px;">
         <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27</option>
@@ -1710,7 +1713,7 @@ async function renderStockStatement(){
     </div>
     <div class="stock-shell">
       <div class="section-title" style="margin-top:0;">Stock & Sales Statement</div>
-      <p class="small">Opening stock is entered once for the first month in the chain. Primary sales are pulled automatically from uploaded sales data. Secondary stock is entered each month, and closing rolls forward to the next month. You can also import secondary sales from a PDF, JPEG, or PNG using OCR Import and review the mapping before saving.</p>
+      <p class="small">Opening stock is entered once for the first month in the chain. Primary sales are pulled automatically from uploaded sales data. Secondary stock is entered each month, and closing rolls forward to the next month. If a BE has multiple stockists, use the stockist dropdown to work on one stockist at a time. You can also import secondary sales from a PDF, JPEG, or PNG using OCR Import and review the mapping before saving.</p>
       <div id="stockBody"><p class="muted">Loading...</p></div>
     </div>
     <div id="stockOcrModal" class="ocr-modal" aria-hidden="true">
@@ -1739,6 +1742,7 @@ async function renderStockStatement(){
   `;
 
   const scopeSel = document.getElementById("stockScopeSel");
+  const stockistSel = document.getElementById("stockStockistSel");
   const monthSel = document.getElementById("stockMonthSel");
   const yearSel = document.getElementById("stockYearSel");
   const scopePill = document.getElementById("stockScopePill");
@@ -1747,6 +1751,13 @@ async function renderStockStatement(){
     scopeSel.innerHTML = buildScopeOptionsHTML(selectedEmpId);
     scopeSel.onchange = () => {
       selectedEmpId = scopeSel.value;
+      loadStockStatementData();
+    };
+  }
+
+  if (stockistSel) {
+    stockistSel.onchange = () => {
+      selectedStockistCode = stockistSel.value;
       loadStockStatementData();
     };
   }
@@ -1820,6 +1831,36 @@ async function loadStockStatementData(){
   visibleStockists.forEach(row => {
     visibleStockistMap.set(normalizeEmpId(row.stockist_code), row);
   });
+  const stockistSelector = document.getElementById("stockStockistSel");
+  const visibleStockistList = [...visibleStockistMap.values()].sort((a, b) => (a.stockist_name || a.stockist_code || '').localeCompare(b.stockist_name || b.stockist_code || ''));
+  const showStockistSelector = visibleStockistList.length > 1;
+  if (stockistSelector) {
+    const options = [];
+    if (session.designation !== 'BE') {
+      options.push(`<option value="all" ${selectedStockistCode === 'all' ? 'selected' : ''}>All stockists</option>`);
+    }
+    visibleStockistList.forEach(row => {
+      const code = normalizeEmpId(row.stockist_code);
+      const name = (row.stockist_name || row.stockist_code || '').toString().trim();
+      options.push(`<option value="${code}">${name}${row.stockist_code ? ` (${row.stockist_code})` : ''}</option>`);
+    });
+    stockistSelector.innerHTML = options.join('');
+    if (session.designation === 'BE') {
+      if (selectedStockistCode === 'all' || !visibleStockistMap.has(normalizeEmpId(selectedStockistCode))) {
+        selectedStockistCode = visibleStockistList[0] ? normalizeEmpId(visibleStockistList[0].stockist_code) : '';
+      }
+      stockistSelector.value = selectedStockistCode || (visibleStockistList[0] ? normalizeEmpId(visibleStockistList[0].stockist_code) : '');
+      stockistSelector.style.display = showStockistSelector ? 'inline-block' : 'none';
+      stockistSelector.disabled = !showStockistSelector;
+    } else {
+      if (selectedStockistCode !== 'all' && !visibleStockistMap.has(normalizeEmpId(selectedStockistCode))) {
+        selectedStockistCode = 'all';
+      }
+      stockistSelector.value = selectedStockistCode;
+      stockistSelector.style.display = visibleStockistList.length ? 'inline-block' : 'none';
+      stockistSelector.disabled = !visibleStockistList.length;
+    }
+  }
   const { data: clubRows, error: clubErr } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
   if (clubErr) {
     body.innerHTML = `<div class="err">Failed to load product catalog: ${clubErr.message}</div>`;
@@ -1963,7 +2004,10 @@ async function loadStockStatementData(){
     }
   });
 
-  const stockistCatalog = [...visibleStockistMap.values()].sort((a, b) => (a.stockist_name || a.stockist_code || '').localeCompare(b.stockist_name || b.stockist_code || ''));
+  let stockistCatalog = visibleStockistList;
+  if (selectedStockistCode !== 'all') {
+    stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
+  }
   const isInitialMonth = targetYear === 2026 && targetMonth === 3;
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
