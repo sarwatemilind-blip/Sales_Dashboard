@@ -2101,14 +2101,12 @@ async function loadStockStatementData(){
       const productKey = normalizeEmpId(product.product_code);
       const currentRate = currentProductRateMap.get(productKey) || null;
       const historicalRate = historicalProductRateMap.get(productKey) || null;
-      const saleRate = primaryUnits > 0
+      const savedRate = saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0;
+      const prevSavedRate = prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0;
+      const marketRate = primaryUnits > 0
         ? (primaryValue / primaryUnits)
-        : (
-          currentRate?.rate
-          || historicalRate?.rate
-          || (saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0)
-          || (prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0)
-        );
+        : (currentRate?.rate || historicalRate?.rate || 0);
+      const saleRate = savedRate || prevSavedRate || marketRate;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
       const openingValue = prevSaved && prevSaved.closing_value != null
