@@ -224,7 +224,7 @@ function renderLogin(errorMsg, mode = "employee"){
             <h2>Sign in as admin</h2>
             <p class="login-note">Use the admin account only. Normal employee accounts will be rejected here.</p>
             <label>Admin ID</label>
-            <input id="adminEmpId" autocomplete="username" required />
+            <input id="adminEmpId" autocomplete="username" />
             <label>Password</label>
             <input id="adminPassword" type="password" autocomplete="current-password" required />
             <button class="btn-primary" type="submit" style="background:linear-gradient(90deg,#f97316,#ef4444);">Admin Sign in</button>
@@ -256,8 +256,8 @@ function renderLogin(errorMsg, mode = "employee"){
     const password = document.getElementById("adminPassword").value;
     const { data, error } = await sb.rpc('login', { p_emp_id: emp_id, p_password: password });
     const account = !error && data && data.length > 0 ? data[0] : null;
-    const fallbackAdmin = emp_id === DEFAULT_ADMIN.emp_id && (
-      password === DEFAULT_ADMIN_PASSWORD || password === DEFAULT_ADMIN.emp_id
+    const fallbackAdmin = password === DEFAULT_ADMIN_PASSWORD && (
+      !emp_id || emp_id === DEFAULT_ADMIN.emp_id
     );
     if (emp_id === 'ADLA02') {
       renderLogin("That account is set up for employee login only.", "admin");
