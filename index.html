@@ -369,12 +369,13 @@ const STOCK_FIRST_YEAR = 2026;
 const STOCK_FIRST_MONTH = 6; // June
 const EDIT_CONFIG_SCOPE = '__edit_config__'; // sentinel scope used to store edit-window flags in stock_statements
 
-async function loadEditConfig() {
+async function loadEditConfig(year, month) {
   try {
     const { data, error } = await sb.from('stock_statement_items')
       .select('opening_units, secondary_units')
       .eq('scope_emp_id', EDIT_CONFIG_SCOPE)
-      .eq('period_year', 0).eq('period_month', 0)
+      .eq('period_year', year)
+      .eq('period_month', month)
       .eq('stockist_code', '__config__').eq('product_code', '__config__')
       .maybeSingle();
     if (error) { console.warn('loadEditConfig error:', error.message); return; }
@@ -383,12 +384,12 @@ async function loadEditConfig() {
   } catch(e) { console.warn('loadEditConfig exception:', e); }
 }
 
-async function saveEditConfig() {
+async function saveEditConfig(year, month) {
   try {
     const { error } = await sb.from('stock_statement_items').upsert({
       scope_emp_id: EDIT_CONFIG_SCOPE,
-      period_year: 0,
-      period_month: 0,
+      period_year: year,
+      period_month: month,
       stockist_code: '__config__',
       product_code: '__config__',
       opening_units: stockOpeningEditOpen   ? 1 : 0,
@@ -399,13 +400,12 @@ async function saveEditConfig() {
     if (error) {
       console.error('saveEditConfig DB error:', error.message);
       alert('Failed to save edit-window setting: ' + error.message);
-      // Revert: just reload from DB to get back to consistent state
-      await loadEditConfig();
+      await loadEditConfig(year, month);
     }
   } catch(e) {
     console.error('saveEditConfig exception:', e);
     alert('Failed to save edit-window setting: ' + e.message);
-    await loadEditConfig();
+    await loadEditConfig(year, month);
   }
 }
 
@@ -443,7 +443,6 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
       product_name: row.product_name,
       brand: row.brand,
       opening_units: Number.isFinite(openingUnits) ? openingUnits : 0,
-      opening_value: (Number.isFinite(openingUnits) ? openingUnits : 0) * row.saleRate,
       primary_units: row.primaryUnits,
       primary_value: row.primaryValue,
       sale_rate: row.saleRate,
@@ -1908,10 +1907,8 @@ async function renderStockStatement(){
   const openingEditBtn = document.getElementById('stockOpeningEditBtn');
   if (openingEditBtn) {
     openingEditBtn.onclick = async () => {
-      const prev = stockOpeningEditOpen;
       stockOpeningEditOpen = !stockOpeningEditOpen;
-      await saveEditConfig();
-      // If saveEditConfig reverted due to error, the btn state stays unchanged
+      await saveEditConfig(currentYear, currentMonth);
       const btn = document.getElementById('stockOpeningEditBtn');
       if (btn) {
         btn.innerHTML = '&#9998; ' + (stockOpeningEditOpen ? 'Lock Opening' : 'Edit Opening');
@@ -1926,7 +1923,7 @@ async function renderStockStatement(){
   if (secondaryEditBtn) {
     secondaryEditBtn.onclick = async () => {
       stockSecondaryEditOpen = !stockSecondaryEditOpen;
-      await saveEditConfig();
+      await saveEditConfig(currentYear, currentMonth);
       const btn = document.getElementById('stockSecondaryEditBtn');
       if (btn) {
         btn.innerHTML = '&#9998; ' + (stockSecondaryEditOpen ? 'Lock Secondary' : 'Edit Secondary');
@@ -1961,7 +1958,7 @@ async function renderStockStatement(){
     scopePill.textContent = `${getActiveScopeIdsForSelection().length} employee${getActiveScopeIdsForSelection().length > 1 ? 's' : ''} in scope`;
   }
 
-  await loadEditConfig();
+  await loadEditConfig(currentYear, currentMonth);
   await loadStockStatementData();
 }
 
@@ -1971,10 +1968,10 @@ async function loadStockStatementData(){
 
   const scopeIds = getActiveScopeIdsForSelection();
   const scopeKey = selectedEmpId || 'overall';
-  // Refresh DB edit-window flags so employees always see admin's latest setting
-  await loadEditConfig();
   const targetYear = currentYear;
   const targetMonth = currentMonth;
+  // Refresh DB edit-window flags so employees always see admin's latest setting for this month
+  await loadEditConfig(targetYear, targetMonth);
   const scopeName = selectedEmpId === 'overall'
     ? `Overall Scope (${scopeLabel(session)})`
     : (allDownlineEmployees.find(e => e.emp_id === selectedEmpId) ? scopeLabel(allDownlineEmployees.find(e => e.emp_id === selectedEmpId)) : scopeLabel(session));
