@@ -1049,7 +1049,8 @@ async function applyStockOcrReview() {
     for (const [key, qty] of grouped.entries()) {
       const row = rowMap.get(key);
       if (!row) continue;
-      const openingInput = document.getElementById(`stockOpening_${row.key}`);
+      const rowKey = statementDomKey(row.stockist_code, row.product_code);
+      const openingInput = document.getElementById(`stockOpening_${rowKey}`);
       const openingUnits = row.openingEditable
         ? (Number.isFinite(parseFloat(openingInput?.value)) ? parseFloat(openingInput?.value) : row.openingUnits)
         : row.openingUnits;
