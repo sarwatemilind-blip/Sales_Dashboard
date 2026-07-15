@@ -369,7 +369,7 @@ let stockSecondaryEditOpen = false; // synced from DB — admin can unlock Secon
 
 // First month of the stock statement chain (June 2026)
 const STOCK_FIRST_YEAR = 2026;
-const STOCK_FIRST_MONTH = 6; // June
+const STOCK_FIRST_MONTH = 3; // June in Fiscal Year (Apr=1, May=2, Jun=3)
 const EDIT_CONFIG_SCOPE = '__edit_config__'; // sentinel scope used to store edit-window flags in stock_statements
 
 async function loadEditConfig(year, month) {
@@ -468,7 +468,6 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   // Upsert in chunks of 500 to avoid Supabase limits
   for (let i = 0; i < payloads.length; i += 500) {
     const chunk = payloads.slice(i, i + 500);
-    alert("Debug Payload: " + JSON.stringify(chunk[0], null, 2));
     const { error } = await sb.from('stock_statement_items').upsert(chunk, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
     if (error) {
       if (!silent) alert('Failed to save statement chunk: ' + error.message);
