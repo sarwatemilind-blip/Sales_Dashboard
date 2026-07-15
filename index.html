@@ -370,25 +370,40 @@ const STOCK_FIRST_MONTH = 6; // June
 const EDIT_CONFIG_SCOPE = '__edit_config__'; // sentinel scope used to store edit-window flags in stock_statements
 
 async function loadEditConfig() {
-  const { data } = await sb.from('stock_statements')
-    .select('period_year, period_month, opening_units, secondary_units')
-    .eq('scope_emp_id', EDIT_CONFIG_SCOPE)
-    .eq('period_year', 0).eq('period_month', 0)
-    .maybeSingle();
-  stockOpeningEditOpen   = !!(data && data.opening_units   === 1);
-  stockSecondaryEditOpen = !!(data && data.secondary_units === 1);
+  try {
+    const { data, error } = await sb.from('stock_statements')
+      .select('period_year, period_month, opening_units, secondary_units')
+      .eq('scope_emp_id', EDIT_CONFIG_SCOPE)
+      .eq('period_year', 0).eq('period_month', 0)
+      .maybeSingle();
+    if (error) { console.warn('loadEditConfig error:', error.message); return; }
+    stockOpeningEditOpen   = !!(data && Number(data.opening_units)   === 1);
+    stockSecondaryEditOpen = !!(data && Number(data.secondary_units) === 1);
+  } catch(e) { console.warn('loadEditConfig exception:', e); }
 }
 
 async function saveEditConfig() {
-  await sb.from('stock_statements').upsert({
-    scope_emp_id: EDIT_CONFIG_SCOPE,
-    period_year: 0,
-    period_month: 0,
-    opening_units: stockOpeningEditOpen   ? 1 : 0,
-    secondary_units: stockSecondaryEditOpen ? 1 : 0,
-    updated_by: session?.emp_id || 'admin',
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'scope_emp_id,period_year,period_month' });
+  try {
+    const { error } = await sb.from('stock_statements').upsert({
+      scope_emp_id: EDIT_CONFIG_SCOPE,
+      period_year: 0,
+      period_month: 0,
+      opening_units: stockOpeningEditOpen   ? 1 : 0,
+      secondary_units: stockSecondaryEditOpen ? 1 : 0,
+      updated_by: session?.emp_id || 'admin',
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'scope_emp_id,period_year,period_month' });
+    if (error) {
+      console.error('saveEditConfig DB error:', error.message);
+      alert('Failed to save edit-window setting: ' + error.message);
+      // Revert: just reload from DB to get back to consistent state
+      await loadEditConfig();
+    }
+  } catch(e) {
+    console.error('saveEditConfig exception:', e);
+    alert('Failed to save edit-window setting: ' + e.message);
+    await loadEditConfig();
+  }
 }
 
 async function saveAllStockStatementEntries({ silent = false } = {}) {
@@ -1890,15 +1905,17 @@ async function renderStockStatement(){
   const openingEditBtn = document.getElementById('stockOpeningEditBtn');
   if (openingEditBtn) {
     openingEditBtn.onclick = async () => {
+      const prev = stockOpeningEditOpen;
       stockOpeningEditOpen = !stockOpeningEditOpen;
       await saveEditConfig();
-      loadStockStatementData();
+      // If saveEditConfig reverted due to error, the btn state stays unchanged
       const btn = document.getElementById('stockOpeningEditBtn');
       if (btn) {
         btn.innerHTML = '&#9998; ' + (stockOpeningEditOpen ? 'Lock Opening' : 'Edit Opening');
         btn.style.borderColor = stockOpeningEditOpen ? 'var(--accent)' : '';
         btn.style.color = stockOpeningEditOpen ? 'var(--accent)' : '';
       }
+      await loadStockStatementData();
     };
   }
   // Admin: separate toggle for Secondary Sales
@@ -1907,13 +1924,13 @@ async function renderStockStatement(){
     secondaryEditBtn.onclick = async () => {
       stockSecondaryEditOpen = !stockSecondaryEditOpen;
       await saveEditConfig();
-      loadStockStatementData();
       const btn = document.getElementById('stockSecondaryEditBtn');
       if (btn) {
         btn.innerHTML = '&#9998; ' + (stockSecondaryEditOpen ? 'Lock Secondary' : 'Edit Secondary');
         btn.style.borderColor = stockSecondaryEditOpen ? 'var(--good)' : '';
         btn.style.color = stockSecondaryEditOpen ? 'var(--good)' : '';
       }
+      await loadStockStatementData();
     };
   }
   document.getElementById("stockOcrBtn").onclick = openStockOcrModal;
@@ -2077,19 +2094,15 @@ async function loadStockStatementData(){
     console.warn("Failed to load historical sales for product rate fallback:", error);
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
-  const [currentSavedResp, prevSavedResp, prevSavedAnyResp] = await Promise.all([
+  const [currentSavedResp, prevSavedAnyResp] = await Promise.all([
     sb.from('stock_statement_items')
       .select('*')
       .eq('scope_emp_id', scopeKey)
       .eq('period_year', targetYear)
       .eq('period_month', targetMonth),
+    // Fetch ALL scope rows for prev month so we can find closing_units regardless of which scope saved it
     sb.from('stock_statement_items')
-      .select('*')
-      .eq('scope_emp_id', scopeKey)
-      .eq('period_year', prevPeriod.year)
-      .eq('period_month', prevPeriod.month),
-    sb.from('stock_statement_items')
-      .select('*')
+      .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
       .eq('period_year', prevPeriod.year)
       .eq('period_month', prevPeriod.month)
   ]);
@@ -2097,17 +2110,30 @@ async function loadStockStatementData(){
     body.innerHTML = `<div class="err">Failed to load saved statement rows: ${currentSavedResp.error.message}</div>`;
     return;
   }
-  if (prevSavedResp.error) {
-    body.innerHTML = `<div class="err">Failed to load previous month statement rows: ${prevSavedResp.error.message}</div>`;
+  if (prevSavedAnyResp.error) {
+    body.innerHTML = `<div class="err">Failed to load previous month statement rows: ${prevSavedAnyResp.error.message}</div>`;
     return;
   }
 
   const currentSavedRows = currentSavedResp.data || [];
-  const prevSavedRows = prevSavedResp.data || [];
   const prevSavedAnyRows = prevSavedAnyResp.data || [];
   const currentSavedMap = new Map(currentSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
-  const prevSavedMap = new Map(prevSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
-  const prevSavedAnyMap = new Map(prevSavedAnyRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
+  // Build prevSavedMap: for each stockist+product key, pick the row with the best (non-zero) closing_units
+  // Prefer the same scope first, fall back to any scope — this ensures July sees June's closing regardless of scope
+  const prevSavedAnyMap = new Map();
+  for (const r of prevSavedAnyRows) {
+    const k = `${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`;
+    const existing = prevSavedAnyMap.get(k);
+    const closingVal = parseFloat(r.closing_units) || 0;
+    const existingClosing = existing ? (parseFloat(existing.closing_units) || 0) : -1;
+    // Prefer same-scope rows; among same scope prefer higher closing; prefer any non-zero over zero
+    const preferThis = !existing
+      || (r.scope_emp_id === scopeKey && existing.scope_emp_id !== scopeKey)
+      || (r.scope_emp_id === existing.scope_emp_id && closingVal > existingClosing);
+    if (preferThis) prevSavedAnyMap.set(k, r);
+  }
+  // prevSavedMap = same as prevSavedAnyMap (scope-aware via above logic — no need for a separate scope-filtered query)
+  const prevSavedMap = prevSavedAnyMap;
 
   const salesMap = new Map();
   const currentProductRateMap = new Map();
@@ -2221,7 +2247,9 @@ async function loadStockStatementData(){
       // Secondary editable: first month OR admin unlocked secondary (independent)
       const openingEditable = canEditOpening;
       const secondaryEditable = canEditSecondary;
-      const openingDisplay = openingUnits > 0 ? openingUnits : (saved ? 0 : '');
+      // Always show the computed openingUnits in the field (even when disabled/read-only)
+      // so July correctly pre-fills from June's closing
+      const openingDisplay = openingUnits;
       const secondaryDisplay = secondaryUnits > 0 ? secondaryUnits : (saved ? 0 : '');
       return {
         stockist_code: stockistCode,
