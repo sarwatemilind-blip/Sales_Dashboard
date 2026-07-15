@@ -361,21 +361,28 @@ const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month
 const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${stockistCode}||${productCode}`);
 let stockOcrState = { file: null, rows: [], stockistCode: '', stockistName: '', status: '' };
+let stockEditWindowOpen = false; // Admin toggle: when true, opening qty is editable for any month
+
+// First month of the stock statement chain (June 2026)
+const STOCK_FIRST_YEAR = 2026;
+const STOCK_FIRST_MONTH = 6; // June
 
 async function saveAllStockStatementEntries({ silent = false } = {}) {
   const rows = (lastStockStatementData.rows || []);
   const scopeKey = lastStockStatementData.scopeEmpId || selectedEmpId || 'overall';
   const targetYear = lastStockStatementData.year || currentYear;
   const targetMonth = lastStockStatementData.month || currentMonth;
+  const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
+  const canEditOpening = isFirstMonth || stockEditWindowOpen;
   const payloads = [];
   for (const row of rows) {
     const rowKey = statementDomKey(row.stockist_code, row.product_code);
     const openingInput = document.getElementById(`stockOpening_${rowKey}`);
     const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
-    // Opening is always editable now — read from input if available
-    const openingRaw = (openingInput?.value ?? '').trim();
+    // Only read opening from input when editable; otherwise use the carried-forward value
+    const openingRaw = canEditOpening ? (openingInput?.value ?? '').trim() : '';
     const secondaryRaw = (secondaryInput?.value ?? '').trim();
-    const openingUnits = openingRaw !== ''
+    const openingUnits = canEditOpening && openingRaw !== ''
       ? (parseFloat(openingRaw) || 0)
       : row.openingUnits;
     const secondaryUnits = secondaryRaw !== ''
@@ -1785,6 +1792,7 @@ async function renderStockStatement(){
       </select>
       <span class="pill" id="stockScopePill">Loading...</span>
       <button id="stockSaveAllBtn" class="btn-primary" style="padding:8px 12px;font-size:13px;width:auto;">Save All Entries</button>
+      ${session.is_admin ? `<button id="stockEditWindowBtn" class="btn-ghost" style="padding:8px 14px;font-size:13px;width:auto;border-color:${stockEditWindowOpen ? 'var(--accent)' : ''};color:${stockEditWindowOpen ? 'var(--accent)' : ''};">&#9998; ${stockEditWindowOpen ? 'Close Edit Window' : 'Open Edit Window'}</button>` : ''}
       <button id="stockDownloadBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">Download Excel</button>
       <button id="stockOcrBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">OCR Import</button>
       <button id="stockRefreshBtn" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Refresh</button>
@@ -1855,7 +1863,8 @@ async function renderStockStatement(){
   };
   document.getElementById("stockRefreshBtn").onclick = () => loadStockStatementData();
   document.getElementById("stockSaveAllBtn").onclick = async () => {
-    await saveAllStockStatementEntries();
+    const saved = await saveAllStockStatementEntries();
+    if (saved) await loadStockStatementData();
   };
   document.getElementById("stockDownloadBtn").onclick = async () => {
     const saved = await saveAllStockStatementEntries({ silent: true });
@@ -1863,6 +1872,22 @@ async function renderStockStatement(){
     await loadStockStatementData();
     downloadStockStatementExcel();
   };
+  // Admin Edit Window toggle
+  const editWinBtn = document.getElementById("stockEditWindowBtn");
+  if (editWinBtn) {
+    editWinBtn.onclick = () => {
+      stockEditWindowOpen = !stockEditWindowOpen;
+      // Re-render the stock body to update input disabled states
+      loadStockStatementData();
+      // Update button text/style
+      const btn = document.getElementById("stockEditWindowBtn");
+      if (btn) {
+        btn.textContent = (stockEditWindowOpen ? '\u2716 Close Edit Window' : '\u2710 Open Edit Window');
+        btn.style.borderColor = stockEditWindowOpen ? 'var(--accent)' : '';
+        btn.style.color = stockEditWindowOpen ? 'var(--accent)' : '';
+      }
+    };
+  }
   document.getElementById("stockOcrBtn").onclick = openStockOcrModal;
   document.getElementById("stockOcrCloseBtn").onclick = closeStockOcrModal;
   document.getElementById("stockOcrPickBtn").onclick = () => document.getElementById("stockOcrFile")?.click();
@@ -2104,6 +2129,9 @@ async function loadStockStatementData(){
   if (selectedStockistCode !== 'all') {
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
+  const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
+  // Opening is editable only on the first month (June 2026) OR when admin has opened the Edit Window
+  const canEditOpening = isFirstMonth || stockEditWindowOpen;
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
@@ -2142,8 +2170,8 @@ async function loadStockStatementData(){
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
-      // Opening is always editable — pre-fill with existing value if saved
-      const openingEditable = true;
+      // Opening editable only on first month or when admin opens Edit Window
+      const openingEditable = canEditOpening;
       const openingDisplay = openingUnits > 0 ? openingUnits : (saved ? 0 : '');
       return {
         stockist_code: stockistCode,
@@ -2251,7 +2279,7 @@ async function loadStockStatementData(){
                   <div class="row-sub">${row.brand || row.product_code}</div>
                 </td>
                 <td class="num">
-                  <input id="stockOpening_${rowKey}" class="stock-input" type="number" step="0.01" min="0" autocomplete="off" value="${row.openingDisplay}" placeholder="Enter qty" data-primary="${row.primaryUnits}" data-salerate="${row.saleRate}" data-rowkey="${rowKey}" />
+                  <input id="stockOpening_${rowKey}" class="stock-input" type="number" step="0.01" min="0" autocomplete="off" value="${row.openingDisplay}" ${row.openingEditable ? 'placeholder="Enter qty"' : 'disabled title="Opening is auto-filled from previous month closing. Admin can unlock via Edit Window."'} data-primary="${row.primaryUnits}" data-salerate="${row.saleRate}" data-rowkey="${rowKey}" />
                 </td>
                 <td class="num">${fmtNum(row.primaryUnits)}</td>
                 <td class="num">${fmtCurrency(row.primaryValue)}</td>
@@ -2295,7 +2323,13 @@ async function loadStockStatementData(){
         </tbody>
       </table>
     </div>
-    <div class="stock-note">Enter the <b>Opening Qty</b> for each product (auto-filled from previous month's closing where available — you can edit it). Enter <b>Secondary Sales</b> units. Total and Closing update live as you type. When all values are correct, click <b>Save All Entries</b> in the toolbar to save everything at once. Closing shown in <span style="color:var(--bad);">red ⚠</span> means secondary exceeds available stock — check your opening or secondary figures.</div>
+    <div class="stock-note">
+      ${isFirstMonth
+        ? '<b style="color:var(--accent);">&#10003; June 2026 (First Month):</b> Enter the <b>Opening Qty</b> for each product, then enter <b>Secondary Sales</b> units. Click <b>Save All Entries</b> when done. Closing will carry forward automatically as opening for July.'
+        : stockEditWindowOpen
+          ? '<b style="color:var(--accent);">&#9998; Edit Window is OPEN (Admin):</b> Opening Qty is unlocked for editing. Make corrections then click <b>Save All Entries</b>. Close the Edit Window when done.'
+          : 'Opening qty is auto-filled from the previous month&rsquo;s closing. Enter <b>Secondary Sales</b> units for this month and click <b>Save All Entries</b>. <i>Opening is locked &mdash; Admin can unlock it via <b>Open Edit Window</b> in the toolbar.</i>'}
+    </div>
   `;
 
   // Wire up live-preview: recalculate Total/Closing in the row as user types opening or secondary
