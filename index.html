@@ -2267,10 +2267,9 @@ async function loadStockStatementData(){
       const historicalRate = historicalProductRateMap.get(productKey) || null;
       const savedRate = saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0;
       const prevSavedRate = prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0;
-      const marketRate = primaryUnits > 0
-        ? (primaryValue / primaryUnits)
-        : (currentRate?.rate || historicalRate?.rate || 0);
-      const saleRate = savedRate || prevSavedRate || marketRate;
+      const marketRate = currentRate?.rate || historicalRate?.rate || 0;
+      // Force master rate to ensure identical value across all months & stockists
+      const saleRate = marketRate;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
       const openingValue = openingUnits * saleRate;
