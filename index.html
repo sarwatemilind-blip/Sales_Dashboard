@@ -2268,11 +2268,7 @@ async function loadStockStatementData(){
       const saleRate = savedRate || prevSavedRate || marketRate;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
-      const openingValue = saved && saved.opening_value != null
-        ? (parseFloat(saved.opening_value) || 0)
-        : (prevSaved && prevSaved.closing_value != null
-          ? (parseFloat(prevSaved.closing_value) || 0)
-          : 0);
+      const openingValue = openingUnits * saleRate;
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
