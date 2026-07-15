@@ -361,12 +361,35 @@ const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month
 const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${stockistCode}||${productCode}`);
 let stockOcrState = { file: null, rows: [], stockistCode: '', stockistName: '', status: '' };
-let stockOpeningEditOpen = false;   // Admin toggle: unlock Opening Qty editing for any month
-let stockSecondaryEditOpen = false; // Admin toggle: unlock Secondary Sales editing
+let stockOpeningEditOpen = false;   // synced from DB — admin can unlock Opening Qty for all users
+let stockSecondaryEditOpen = false; // synced from DB — admin can unlock Secondary Sales for all users
 
 // First month of the stock statement chain (June 2026)
 const STOCK_FIRST_YEAR = 2026;
 const STOCK_FIRST_MONTH = 6; // June
+const EDIT_CONFIG_SCOPE = '__edit_config__'; // sentinel scope used to store edit-window flags in stock_statements
+
+async function loadEditConfig() {
+  const { data } = await sb.from('stock_statements')
+    .select('period_year, period_month, opening_units, secondary_units')
+    .eq('scope_emp_id', EDIT_CONFIG_SCOPE)
+    .eq('period_year', 0).eq('period_month', 0)
+    .maybeSingle();
+  stockOpeningEditOpen   = !!(data && data.opening_units   === 1);
+  stockSecondaryEditOpen = !!(data && data.secondary_units === 1);
+}
+
+async function saveEditConfig() {
+  await sb.from('stock_statements').upsert({
+    scope_emp_id: EDIT_CONFIG_SCOPE,
+    period_year: 0,
+    period_month: 0,
+    opening_units: stockOpeningEditOpen   ? 1 : 0,
+    secondary_units: stockSecondaryEditOpen ? 1 : 0,
+    updated_by: session?.emp_id || 'admin',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'scope_emp_id,period_year,period_month' });
+}
 
 async function saveAllStockStatementEntries({ silent = false } = {}) {
   const rows = (lastStockStatementData.rows || []);
@@ -424,27 +447,8 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     if (!silent) alert('Failed to save statement: ' + error.message);
     return false;
   }
-  const nextPeriod = nextFiscalPeriod(targetYear, targetMonth);
-  const carryForwardPayloads = payloads.map(row => ({
-    scope_emp_id: row.scope_emp_id,
-    period_year: nextPeriod.year,
-    period_month: nextPeriod.month,
-    stockist_code: row.stockist_code,
-    product_code: row.product_code,
-    opening_units: row.closing_units,
-    opening_value: row.closing_value,
-    sale_rate: row.sale_rate,
-    total_units: row.closing_units,
-    closing_units: row.closing_units,
-    closing_value: row.closing_value,
-    updated_by: session.emp_id,
-    updated_at: new Date().toISOString()
-  }));
-  const { error: carryError } = await sb.from('stock_statement_items').upsert(carryForwardPayloads, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-  if (carryError) {
-    if (!silent) alert('Saved current month, but could not carry forward opening to next month: ' + carryError.message);
-    return false;
-  }
+  // No carry-forward write: next month's opening is always derived dynamically
+  // from the previous month's actual closing_units when the statement is loaded.
   if (!silent) alert('All entries saved successfully!');
   return true;
 }
@@ -1885,8 +1889,9 @@ async function renderStockStatement(){
   // Admin: separate toggle for Opening Qty
   const openingEditBtn = document.getElementById('stockOpeningEditBtn');
   if (openingEditBtn) {
-    openingEditBtn.onclick = () => {
+    openingEditBtn.onclick = async () => {
       stockOpeningEditOpen = !stockOpeningEditOpen;
+      await saveEditConfig();
       loadStockStatementData();
       const btn = document.getElementById('stockOpeningEditBtn');
       if (btn) {
@@ -1899,8 +1904,9 @@ async function renderStockStatement(){
   // Admin: separate toggle for Secondary Sales
   const secondaryEditBtn = document.getElementById('stockSecondaryEditBtn');
   if (secondaryEditBtn) {
-    secondaryEditBtn.onclick = () => {
+    secondaryEditBtn.onclick = async () => {
       stockSecondaryEditOpen = !stockSecondaryEditOpen;
+      await saveEditConfig();
       loadStockStatementData();
       const btn = document.getElementById('stockSecondaryEditBtn');
       if (btn) {
@@ -1935,6 +1941,7 @@ async function renderStockStatement(){
     scopePill.textContent = `${getActiveScopeIdsForSelection().length} employee${getActiveScopeIdsForSelection().length > 1 ? 's' : ''} in scope`;
   }
 
+  await loadEditConfig();
   await loadStockStatementData();
 }
 
@@ -1944,6 +1951,8 @@ async function loadStockStatementData(){
 
   const scopeIds = getActiveScopeIdsForSelection();
   const scopeKey = selectedEmpId || 'overall';
+  // Refresh DB edit-window flags so employees always see admin's latest setting
+  await loadEditConfig();
   const targetYear = currentYear;
   const targetMonth = currentMonth;
   const scopeName = selectedEmpId === 'overall'
@@ -2165,14 +2174,28 @@ async function loadStockStatementData(){
       const saved = currentSavedMap.get(key) || null;
       const prevSaved = prevSavedMap.get(key) || null;
       const prevAnySaved = prevSavedAnyMap.get(key) || null;
-      // Opening: always prefer explicitly saved value, then fallback to prev closing
-      const openingUnits = saved && saved.opening_units != null
-        ? (parseFloat(saved.opening_units) || 0)
-        : (prevSaved && prevSaved.closing_units != null
-          ? (parseFloat(prevSaved.closing_units) || 0)
-          : (prevAnySaved && prevAnySaved.closing_units != null
-            ? (parseFloat(prevAnySaved.closing_units) || 0)
-            : 0));
+      // Opening for non-first months: ALWAYS derive from previous month's actual closing.
+      // This prevents stale carry-forward data from causing wrong (e.g. negative) openings.
+      // For the first month (June 2026), use the saved opening or 0.
+      let openingUnits;
+      if (isFirstMonth) {
+        // First month: use saved opening if explicitly stored, else 0
+        openingUnits = (saved && saved.opening_units != null)
+          ? (parseFloat(saved.opening_units) || 0)
+          : 0;
+      } else {
+        // Non-first months: prefer prev month's actual closing (live, never stale)
+        if (prevSaved && prevSaved.closing_units != null) {
+          openingUnits = Math.max(0, parseFloat(prevSaved.closing_units) || 0);
+        } else if (prevAnySaved && prevAnySaved.closing_units != null) {
+          openingUnits = Math.max(0, parseFloat(prevAnySaved.closing_units) || 0);
+        } else if (saved && saved.opening_units != null) {
+          // Fallback: use whatever was explicitly saved (e.g. manual admin override)
+          openingUnits = Math.max(0, parseFloat(saved.opening_units) || 0);
+        } else {
+          openingUnits = 0;
+        }
+      }
       const primaryUnits = sales ? sales.primary_units : 0;
       const primaryValue = sales ? sales.primary_value : 0;
       const productKey = normalizeEmpId(product.product_code);
