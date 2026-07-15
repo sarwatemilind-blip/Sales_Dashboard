@@ -468,6 +468,7 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   // Upsert in chunks of 500 to avoid Supabase limits
   for (let i = 0; i < payloads.length; i += 500) {
     const chunk = payloads.slice(i, i + 500);
+    alert("Debug Payload: " + JSON.stringify(chunk[0], null, 2));
     const { error } = await sb.from('stock_statement_items').upsert(chunk, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
     if (error) {
       if (!silent) alert('Failed to save statement chunk: ' + error.message);
