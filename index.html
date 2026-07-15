@@ -2015,30 +2015,19 @@ async function loadStockStatementData(){
   const showStockistSelector = visibleStockistList.length > 1;
   if (stockistSelector) {
     const options = [];
-    if (session.designation !== 'BE') {
-      options.push(`<option value="all" ${selectedStockistCode === 'all' ? 'selected' : ''}>All stockists</option>`);
-    }
+    options.push(`<option value="all" ${selectedStockistCode === 'all' ? 'selected' : ''}>All stockists</option>`);
     visibleStockistList.forEach(row => {
       const code = normalizeEmpId(row.stockist_code);
       const name = (row.stockist_name || row.stockist_code || '').toString().trim();
       options.push(`<option value="${code}">${name}${row.stockist_code ? ` (${row.stockist_code})` : ''}</option>`);
     });
     stockistSelector.innerHTML = options.join('');
-    if (session.designation === 'BE') {
-      if (selectedStockistCode === 'all' || !visibleStockistMap.has(normalizeEmpId(selectedStockistCode))) {
-        selectedStockistCode = visibleStockistList[0] ? normalizeEmpId(visibleStockistList[0].stockist_code) : '';
-      }
-      stockistSelector.value = selectedStockistCode || (visibleStockistList[0] ? normalizeEmpId(visibleStockistList[0].stockist_code) : '');
-      stockistSelector.style.display = showStockistSelector ? 'inline-block' : 'none';
-      stockistSelector.disabled = !showStockistSelector;
-    } else {
-      if (selectedStockistCode !== 'all' && !visibleStockistMap.has(normalizeEmpId(selectedStockistCode))) {
-        selectedStockistCode = 'all';
-      }
-      stockistSelector.value = selectedStockistCode;
-      stockistSelector.style.display = visibleStockistList.length ? 'inline-block' : 'none';
-      stockistSelector.disabled = !visibleStockistList.length;
+    if (selectedStockistCode !== 'all' && !visibleStockistMap.has(normalizeEmpId(selectedStockistCode))) {
+      selectedStockistCode = 'all';
     }
+    stockistSelector.value = selectedStockistCode;
+    stockistSelector.style.display = visibleStockistList.length ? 'inline-block' : 'none';
+    stockistSelector.disabled = !visibleStockistList.length;
   }
   const { data: clubRows, error: clubErr } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
   if (clubErr) {
