@@ -465,10 +465,14 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     if (!silent) alert('Nothing to save.');
     return false;
   }
-  const { error } = await sb.from('stock_statement_items').upsert(payloads, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
-  if (error) {
-    if (!silent) alert('Failed to save statement: ' + error.message);
-    return false;
+  // Upsert in chunks of 500 to avoid Supabase limits
+  for (let i = 0; i < payloads.length; i += 500) {
+    const chunk = payloads.slice(i, i + 500);
+    const { error } = await sb.from('stock_statement_items').upsert(chunk, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+    if (error) {
+      if (!silent) alert('Failed to save statement chunk: ' + error.message);
+      return false;
+    }
   }
   // No carry-forward write: next month's opening is always derived dynamically
   // from the previous month's actual closing_units when the statement is loaded.
@@ -2101,16 +2105,39 @@ async function loadStockStatementData(){
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
   const [currentSavedResp, prevSavedAnyResp] = await Promise.all([
-    sb.from('stock_statement_items')
-      .select('*')
-      .eq('scope_emp_id', scopeKey)
-      .eq('period_year', targetYear)
-      .eq('period_month', targetMonth),
-    // Fetch ALL scope rows for prev month so we can find closing_units regardless of which scope saved it
-    sb.from('stock_statement_items')
-      .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
-      .eq('period_year', prevPeriod.year)
-      .eq('period_month', prevPeriod.month)
+    (async () => {
+      let all = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await sb.from('stock_statement_items')
+          .select('*')
+          .eq('scope_emp_id', scopeKey)
+          .eq('period_year', targetYear)
+          .eq('period_month', targetMonth)
+          .range(from, from + 999);
+        if (error) return { error };
+        all = all.concat(data || []);
+        if (!data || data.length < 1000) break;
+        from += 1000;
+      }
+      return { data: all };
+    })(),
+    (async () => {
+      let all = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await sb.from('stock_statement_items')
+          .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
+          .eq('period_year', prevPeriod.year)
+          .eq('period_month', prevPeriod.month)
+          .range(from, from + 999);
+        if (error) return { error };
+        all = all.concat(data || []);
+        if (!data || data.length < 1000) break;
+        from += 1000;
+      }
+      return { data: all };
+    })()
   ]);
   if (currentSavedResp.error) {
     body.innerHTML = `<div class="err">Failed to load saved statement rows: ${currentSavedResp.error.message}</div>`;
