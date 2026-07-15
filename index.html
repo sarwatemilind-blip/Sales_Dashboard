@@ -361,7 +361,8 @@ const nextFiscalPeriod = (year, month) => month === 12 ? { year: year + 1, month
 const periodKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${stockistCode}||${productCode}`);
 let stockOcrState = { file: null, rows: [], stockistCode: '', stockistName: '', status: '' };
-let stockEditWindowOpen = false; // Admin toggle: when true, opening qty is editable for any month
+let stockOpeningEditOpen = false;   // Admin toggle: unlock Opening Qty editing for any month
+let stockSecondaryEditOpen = false; // Admin toggle: unlock Secondary Sales editing
 
 // First month of the stock statement chain (June 2026)
 const STOCK_FIRST_YEAR = 2026;
@@ -373,19 +374,21 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   const targetYear = lastStockStatementData.year || currentYear;
   const targetMonth = lastStockStatementData.month || currentMonth;
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  const canEditOpening = isFirstMonth || stockEditWindowOpen;
+  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
+  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
   const payloads = [];
   for (const row of rows) {
     const rowKey = statementDomKey(row.stockist_code, row.product_code);
     const openingInput = document.getElementById(`stockOpening_${rowKey}`);
     const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
-    // Only read opening from input when editable; otherwise use the carried-forward value
+    // Opening: only read from input when its edit is open
     const openingRaw = canEditOpening ? (openingInput?.value ?? '').trim() : '';
-    const secondaryRaw = canEditOpening ? (secondaryInput?.value ?? '').trim() : '';
+    // Secondary: only read from input when its edit is open
+    const secondaryRaw = canEditSecondary ? (secondaryInput?.value ?? '').trim() : '';
     const openingUnits = canEditOpening && openingRaw !== ''
       ? (parseFloat(openingRaw) || 0)
       : row.openingUnits;
-    const secondaryUnits = canEditOpening && secondaryRaw !== ''
+    const secondaryUnits = canEditSecondary && secondaryRaw !== ''
       ? (parseFloat(secondaryRaw) || 0)
       : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
     const computedTotal = openingUnits + row.primaryUnits;
@@ -1792,7 +1795,14 @@ async function renderStockStatement(){
       </select>
       <span class="pill" id="stockScopePill">Loading...</span>
       <button id="stockSaveAllBtn" class="btn-primary" style="padding:8px 12px;font-size:13px;width:auto;">Save All Entries</button>
-      ${session.is_admin ? `<button id="stockEditWindowBtn" class="btn-ghost" style="padding:8px 14px;font-size:13px;width:auto;border-color:${stockEditWindowOpen ? 'var(--accent)' : ''};color:${stockEditWindowOpen ? 'var(--accent)' : ''};">&#9998; ${stockEditWindowOpen ? 'Close Edit Window' : 'Open Edit Window'}</button>` : ''}
+      ${session.is_admin ? `
+        <button id="stockOpeningEditBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;width:auto;${stockOpeningEditOpen ? 'border-color:var(--accent);color:var(--accent);' : ''}" title="Toggle Opening Qty editing for all months">
+          &#9998; ${stockOpeningEditOpen ? 'Lock Opening' : 'Edit Opening'}
+        </button>
+        <button id="stockSecondaryEditBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;width:auto;${stockSecondaryEditOpen ? 'border-color:var(--good);color:var(--good);' : ''}" title="Toggle Secondary Sales editing">
+          &#9998; ${stockSecondaryEditOpen ? 'Lock Secondary' : 'Edit Secondary'}
+        </button>
+      ` : ''}
       <button id="stockDownloadBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">Download Excel</button>
       <button id="stockOcrBtn" class="btn-ghost" style="padding:8px 12px;font-size:13px;">OCR Import</button>
       <button id="stockRefreshBtn" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Refresh</button>
@@ -1872,19 +1882,31 @@ async function renderStockStatement(){
     await loadStockStatementData();
     downloadStockStatementExcel();
   };
-  // Admin Edit Window toggle
-  const editWinBtn = document.getElementById("stockEditWindowBtn");
-  if (editWinBtn) {
-    editWinBtn.onclick = () => {
-      stockEditWindowOpen = !stockEditWindowOpen;
-      // Re-render the stock body to update input disabled states
+  // Admin: separate toggle for Opening Qty
+  const openingEditBtn = document.getElementById('stockOpeningEditBtn');
+  if (openingEditBtn) {
+    openingEditBtn.onclick = () => {
+      stockOpeningEditOpen = !stockOpeningEditOpen;
       loadStockStatementData();
-      // Update button text/style
-      const btn = document.getElementById("stockEditWindowBtn");
+      const btn = document.getElementById('stockOpeningEditBtn');
       if (btn) {
-        btn.textContent = (stockEditWindowOpen ? '\u2716 Close Edit Window' : '\u2710 Open Edit Window');
-        btn.style.borderColor = stockEditWindowOpen ? 'var(--accent)' : '';
-        btn.style.color = stockEditWindowOpen ? 'var(--accent)' : '';
+        btn.innerHTML = '&#9998; ' + (stockOpeningEditOpen ? 'Lock Opening' : 'Edit Opening');
+        btn.style.borderColor = stockOpeningEditOpen ? 'var(--accent)' : '';
+        btn.style.color = stockOpeningEditOpen ? 'var(--accent)' : '';
+      }
+    };
+  }
+  // Admin: separate toggle for Secondary Sales
+  const secondaryEditBtn = document.getElementById('stockSecondaryEditBtn');
+  if (secondaryEditBtn) {
+    secondaryEditBtn.onclick = () => {
+      stockSecondaryEditOpen = !stockSecondaryEditOpen;
+      loadStockStatementData();
+      const btn = document.getElementById('stockSecondaryEditBtn');
+      if (btn) {
+        btn.innerHTML = '&#9998; ' + (stockSecondaryEditOpen ? 'Lock Secondary' : 'Edit Secondary');
+        btn.style.borderColor = stockSecondaryEditOpen ? 'var(--good)' : '';
+        btn.style.color = stockSecondaryEditOpen ? 'var(--good)' : '';
       }
     };
   }
@@ -2130,8 +2152,10 @@ async function loadStockStatementData(){
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  // Opening is editable only on the first month (June 2026) OR when admin has opened the Edit Window
-  const canEditOpening = isFirstMonth || stockEditWindowOpen;
+  // Opening editable: first month (June 2026) OR admin opened Opening edit
+  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
+  // Secondary editable: first month (June 2026) OR admin opened Secondary edit
+  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
@@ -2170,10 +2194,10 @@ async function loadStockStatementData(){
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
       const closingValue = closingUnits * saleRate;
-      // Opening editable only on first month or when admin opens Edit Window
-      // Secondary follows the same rule — both locked together
+      // Opening editable: first month OR admin unlocked opening
+      // Secondary editable: first month OR admin unlocked secondary (independent)
       const openingEditable = canEditOpening;
-      const secondaryEditable = canEditOpening;
+      const secondaryEditable = canEditSecondary;
       const openingDisplay = openingUnits > 0 ? openingUnits : (saved ? 0 : '');
       const secondaryDisplay = secondaryUnits > 0 ? secondaryUnits : (saved ? 0 : '');
       return {
@@ -2330,10 +2354,16 @@ async function loadStockStatementData(){
     </div>
     <div class="stock-note">
       ${isFirstMonth
-        ? '<b style="color:var(--accent);">&#10003; June 2026 (First Month):</b> Enter the <b>Opening Qty</b> and <b>Secondary Sales</b> units for each product. Click <b>Save All Entries</b> when done. June closing carries forward as July opening automatically.'
-        : stockEditWindowOpen
-          ? '<b style="color:var(--accent);">&#9998; Edit Window is OPEN (Admin):</b> Both Opening Qty and Secondary Sales are unlocked. Make corrections then click <b>Save All Entries</b>. Click <b>Close Edit Window</b> in the toolbar when done.'
-          : '<b>&#128274; Edit Window is closed.</b> Opening and Secondary are locked for the month. Admin must click <b>Open Edit Window</b> in the toolbar to allow entry. Closing shown in <span style="color:var(--bad);">red &#9888;</span> means secondary exceeds available stock.'}
+        ? '<b style="color:var(--accent);">&#10003; June 2026 (First Month):</b> Enter the <b>Opening Qty</b> and <b>Secondary Sales</b> units for each product. Click <b>Save All Entries</b> when done.'
+        : (() => {
+            const parts = [];
+            if (canEditOpening) parts.push('<span style="color:var(--accent);">&#9998; <b>Opening Qty unlocked</b> (Admin)</span>');
+            else parts.push('<span>&#128274; Opening locked (auto-filled from prev. closing)</span>');
+            if (canEditSecondary) parts.push('<span style="color:var(--good);">&#9998; <b>Secondary Sales unlocked</b> (Admin)</span>');
+            else parts.push('<span>&#128274; Secondary locked</span>');
+            return parts.join(' &nbsp;|&nbsp; ') + '. ' + (canEditOpening || canEditSecondary ? 'Click <b>Save All Entries</b> when done.' : 'Use the <b>Edit Opening</b> / <b>Edit Secondary</b> toolbar buttons to unlock.');
+          })()
+      }
     </div>
   `;
 
