@@ -163,6 +163,19 @@ const FY_MONTHS = [
   {n:1,label:"April"},{n:2,label:"May"},{n:3,label:"June"},{n:4,label:"July"},
   {n:5,label:"August"},{n:6,label:"September"},{n:7,label:"October"},{n:8,label:"November"},
   {n:9,label:"December"},{n:10,label:"January"},{n:11,label:"February"},{n:12,label:"March"}
+</head>
+<body>
+
+<!-- ============================================================
+  CONFIG — fill in your own Supabase project values below
+============================================================ -->
+<script>
+const SUPABASE_URL = "https://jxwazdpsnupjiogmxozn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2F6ZHBzbnVwamlvZ214b3puIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3ODQ1NTUsImV4cCI6MjA5ODM2MDU1NX0.h5yHKPtm6CKoeZfFc2YsACvxhQqHKYd7wmvDk8LXsFA";
+const FY_MONTHS = [
+  {n:1,label:"April"},{n:2,label:"May"},{n:3,label:"June"},{n:4,label:"July"},
+  {n:5,label:"August"},{n:6,label:"September"},{n:7,label:"October"},{n:8,label:"November"},
+  {n:9,label:"December"},{n:10,label:"January"},{n:11,label:"February"},{n:12,label:"March"}
 ];
 </script>
 
@@ -171,6 +184,7 @@ const FY_MONTHS = [
 <script>
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let session = null; // { emp_id, name, designation, hq_code, hq_name, manager_emp_id, is_admin }
+let isStockStatementDirty = false;
 let downlineIds = [];
 let allDownlineEmployees = [];
 const app = document.getElementById("app");
@@ -416,6 +430,7 @@ async function saveEditConfig(year, month) {
 }
 
 async function saveAllStockStatementEntries({ silent = false } = {}) {
+  if (!isStockStatementDirty) return true;
   const rows = (lastStockStatementData.rows || []);
   const scopeKey = lastStockStatementData.scopeEmpId || selectedEmpId || 'overall';
   const targetYear = lastStockStatementData.year || currentYear;
@@ -440,7 +455,7 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
       : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
     const computedTotal = openingUnits + row.primaryUnits;
     payloads.push({
-      scope_emp_id: scopeKey,
+      scope_emp_id: row.emp_id || scopeKey,
       period_year: targetYear,
       period_month: targetMonth,
       stockist_code: row.stockist_code,
@@ -474,6 +489,7 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
       return false;
     }
   }
+  isStockStatementDirty = false;
   // No carry-forward write: next month's opening is always derived dynamically
   // from the previous month's actual closing_units when the statement is loaded.
   if (!silent) alert('All entries saved successfully!');
@@ -1055,7 +1071,7 @@ async function applyStockOcrReview() {
         ? (Number.isFinite(parseFloat(openingInput?.value)) ? parseFloat(openingInput?.value) : row.openingUnits)
         : row.openingUnits;
       payloads.push({
-        scope_emp_id: scopeKey,
+        scope_emp_id: row.emp_id || scopeKey,
         period_year: targetYear,
         period_month: targetMonth,
         stockist_code: row.stockist_code,
@@ -1068,10 +1084,10 @@ async function applyStockOcrReview() {
         primary_value: row.primaryValue,
         sale_rate: row.saleRate,
         total_units: row.totalUnits,
-        secondary_units: qty,
-        secondary_value: qty * row.saleRate,
-        closing_units: row.totalUnits - qty,
-        closing_value: (row.totalUnits - qty) * row.saleRate,
+        secondary_units: Number.isFinite(qty) ? qty : 0,
+        secondary_value: (Number.isFinite(qty) ? qty : 0) * row.saleRate,
+        closing_units: row.totalUnits - (Number.isFinite(qty) ? qty : 0),
+        closing_value: (row.totalUnits - (Number.isFinite(qty) ? qty : 0)) * row.saleRate,
         updated_by: session.emp_id,
         updated_at: new Date().toISOString()
       });
@@ -1089,6 +1105,7 @@ async function applyStockOcrReview() {
       if (status) status.textContent = `Failed to apply OCR values: ${error.message}`;
       return;
     }
+    isStockStatementDirty = false;
     if (status) status.textContent = `Applied ${payloads.length} reviewed rows.`;
     if (progress) progress.style.width = '100%';
     closeStockOcrModal();
@@ -1974,6 +1991,7 @@ async function renderStockStatement(){
 }
 
 async function loadStockStatementData(){
+  isStockStatementDirty = false;
   const body = document.getElementById("stockBody");
   if (!body) return;
 
@@ -2105,41 +2123,78 @@ async function loadStockStatementData(){
     console.warn("Failed to load historical sales for product rate fallback:", error);
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
+
+  function getSubtreeIds(rootId) {
+    if (rootId === 'overall') return ['overall'];
+    const ids = new Set([rootId]);
+    let added;
+    do {
+      added = false;
+      for (const e of allDownlineEmployees) {
+        if (!ids.has(e.emp_id) && e.manager_emp_id && ids.has(e.manager_emp_id)) {
+          ids.add(e.emp_id);
+          added = true;
+        }
+      }
+    } while (added);
+    return Array.from(ids);
+  }
+  const queryScopeIds = [...new Set([...getSubtreeIds(scopeKey), 'overall'])];
+
   const [currentSavedResp, prevSavedAnyResp] = await Promise.all([
     (async () => {
       let all = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await sb.from('stock_statement_items')
-          .select('*')
-          .eq('scope_emp_id', scopeKey)
-          .eq('period_year', targetYear)
-          .eq('period_month', targetMonth)
-          .order('stockist_code')
-          .order('product_code')
-          .range(from, from + 999);
-        if (error) return { error };
-        all = all.concat(data || []);
-        if (!data || data.length < 1000) break;
-        from += 1000;
+      const chunkSize = 50;
+      const chunks = [];
+      const stockistCodes = visibleStockists.map(r => r.stockist_code);
+      for (let i = 0; i < stockistCodes.length; i += chunkSize) {
+        chunks.push(stockistCodes.slice(i, i + chunkSize));
+      }
+      for (const chunk of chunks) {
+        let from = 0;
+        while (true) {
+          const { data, error } = await sb.from('stock_statement_items')
+            .select('stockist_code, product_code, scope_emp_id, opening_units, secondary_units')
+            .eq('period_year', targetYear)
+            .eq('period_month', targetMonth)
+            .in('stockist_code', chunk)
+            .in('scope_emp_id', queryScopeIds)
+            .order('stockist_code')
+            .order('product_code')
+            .range(from, from + 999);
+          if (error) return { error };
+          all = all.concat(data || []);
+          if (!data || data.length < 1000) break;
+          from += 1000;
+        }
       }
       return { data: all };
     })(),
     (async () => {
       let all = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await sb.from('stock_statement_items')
-          .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
-          .eq('period_year', prevPeriod.year)
-          .eq('period_month', prevPeriod.month)
-          .order('stockist_code')
-          .order('product_code')
-          .range(from, from + 999);
-        if (error) return { error };
-        all = all.concat(data || []);
-        if (!data || data.length < 1000) break;
-        from += 1000;
+      const chunkSize = 50;
+      const chunks = [];
+      const stockistCodes = visibleStockists.map(r => r.stockist_code);
+      for (let i = 0; i < stockistCodes.length; i += chunkSize) {
+        chunks.push(stockistCodes.slice(i, i + chunkSize));
+      }
+      for (const chunk of chunks) {
+        let from = 0;
+        while (true) {
+          const { data, error } = await sb.from('stock_statement_items')
+            .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
+            .eq('period_year', prevPeriod.year)
+            .eq('period_month', prevPeriod.month)
+            .in('stockist_code', chunk)
+            .in('scope_emp_id', queryScopeIds)
+            .order('stockist_code')
+            .order('product_code')
+            .range(from, from + 999);
+          if (error) return { error };
+          all = all.concat(data || []);
+          if (!data || data.length < 1000) break;
+          from += 1000;
+        }
       }
       return { data: all };
     })()
@@ -2155,7 +2210,28 @@ async function loadStockStatementData(){
 
   const currentSavedRows = currentSavedResp.data || [];
   const prevSavedAnyRows = prevSavedAnyResp.data || [];
-  const currentSavedMap = new Map(currentSavedRows.map(r => [`${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`, r]));
+  const currentSavedMap = new Map();
+  for (const r of currentSavedRows) {
+    const key = `${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`;
+    const existing = currentSavedMap.get(key);
+    if (!existing) {
+      currentSavedMap.set(key, r);
+    } else {
+      const rTotal = (parseFloat(r.opening_units) || 0) + (parseFloat(r.secondary_units) || 0);
+      const eTotal = (parseFloat(existing.opening_units) || 0) + (parseFloat(existing.secondary_units) || 0);
+      
+      const isROverall = r.scope_emp_id === 'overall';
+      const isEOverall = existing.scope_emp_id === 'overall';
+
+      if (isROverall && !isEOverall && rTotal > 0 && eTotal === 0) {
+        currentSavedMap.set(key, r);
+      } else if (!isROverall && isEOverall && eTotal > 0 && rTotal === 0) {
+        // keep existing
+      } else if (rTotal > eTotal || (rTotal === eTotal && isROverall)) {
+        currentSavedMap.set(key, r);
+      }
+    }
+  }
   // Build prevSavedMap: for each stockist+product key, pick the row with the best (non-zero) closing_units
   // Prefer the same scope first, fall back to any scope — this ensures July sees June's closing regardless of scope
   const prevSavedAnyMap = new Map();
@@ -2166,8 +2242,8 @@ async function loadStockStatementData(){
     const existingClosing = existing ? (parseFloat(existing.closing_units) || 0) : -1;
     // Prefer same-scope rows; among same scope prefer higher closing; prefer any non-zero over zero
     const preferThis = !existing
-      || (r.scope_emp_id === scopeKey && existing.scope_emp_id !== scopeKey)
-      || (r.scope_emp_id === existing.scope_emp_id && closingVal > existingClosing);
+      || closingVal > existingClosing
+      || (closingVal === existingClosing && r.scope_emp_id === 'overall');
     if (preferThis) prevSavedAnyMap.set(k, r);
   }
   // prevSavedMap = same as prevSavedAnyMap (scope-aware via above logic — no need for a separate scope-filtered query)
@@ -2255,23 +2331,28 @@ async function loadStockStatementData(){
           openingUnits = Math.max(0, parseFloat(prevAnySaved.closing_units) || 0);
         } else if (saved && saved.opening_units != null) {
           // Fallback: use whatever was explicitly saved (e.g. manual admin override)
-          openingUnits = Math.max(0, parseFloat(saved.opening_units) || 0);
+          openingUnits = parseFloat(saved.opening_units) || 0;
         } else {
           openingUnits = 0;
         }
       }
       const primaryUnits = sales ? sales.primary_units : 0;
-      const primaryValue = sales ? sales.primary_value : 0;
+      const rawPrimaryValue = sales ? sales.primary_value : 0;
       const productKey = normalizeEmpId(product.product_code);
       const currentRate = currentProductRateMap.get(productKey) || null;
       const historicalRate = historicalProductRateMap.get(productKey) || null;
-      const savedRate = saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) || 0 : 0;
-      const prevSavedRate = prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) || 0 : 0;
+      const savedRate = saved && saved.sale_rate != null ? parseFloat(saved.sale_rate) : null;
+      const prevSavedRate = prevSaved && prevSaved.sale_rate != null ? parseFloat(prevSaved.sale_rate) : null;
       const marketRate = currentRate?.rate || historicalRate?.rate || 0;
-      // Force master rate to ensure identical value across all months & stockists
+      
+      // Use the uniform market rate from product master to ensure identical saleRate across all months
       const saleRate = marketRate;
+      
+      // Calculate primary value using the uniform sale rate to match closing value logic
+      const primaryValue = primaryUnits * saleRate;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
+      // Opening value is always based on opening units and the consistent saleRate
       const openingValue = openingUnits * saleRate;
       const secondaryValue = secondaryUnits * saleRate;
       const closingUnits = totalUnits - secondaryUnits;
@@ -2482,8 +2563,12 @@ async function loadStockStatementData(){
         }
       }
 
-      if (openingInput && row.openingEditable) openingInput.addEventListener('input', updateRowCalc);
-      if (secondaryInput && row.secondaryEditable) secondaryInput.addEventListener('input', updateRowCalc);
+      if (openingInput && row.openingEditable) {
+        openingInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); });
+      }
+      if (secondaryInput && row.secondaryEditable) {
+        secondaryInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); });
+      }
     });
   });
 }
