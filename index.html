@@ -2114,6 +2114,8 @@ async function loadStockStatementData(){
           .eq('scope_emp_id', scopeKey)
           .eq('period_year', targetYear)
           .eq('period_month', targetMonth)
+          .order('stockist_code')
+          .order('product_code')
           .range(from, from + 999);
         if (error) return { error };
         all = all.concat(data || []);
@@ -2130,6 +2132,8 @@ async function loadStockStatementData(){
           .select('stockist_code, product_code, scope_emp_id, closing_units, closing_value, sale_rate, opening_units, secondary_units')
           .eq('period_year', prevPeriod.year)
           .eq('period_month', prevPeriod.month)
+          .order('stockist_code')
+          .order('product_code')
           .range(from, from + 999);
         if (error) return { error };
         all = all.concat(data || []);
