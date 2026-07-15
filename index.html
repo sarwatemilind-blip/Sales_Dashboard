@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>Adonis Field Force — Sales Dashboard</title>
 <script src="supabase.js"></script>
 <link rel="icon" href="adonis-logo.png" type="image/png" />
@@ -370,6 +373,9 @@ const STOCK_FIRST_MONTH = 6; // June
 const EDIT_CONFIG_SCOPE = '__edit_config__'; // sentinel scope used to store edit-window flags in stock_statements
 
 async function loadEditConfig(year, month) {
+  // Always default to locked (false) — only set true if DB explicitly says 1
+  stockOpeningEditOpen   = false;
+  stockSecondaryEditOpen = false;
   try {
     const { data, error } = await sb.from('stock_statement_items')
       .select('opening_units, secondary_units')
@@ -378,10 +384,10 @@ async function loadEditConfig(year, month) {
       .eq('period_month', month)
       .eq('stockist_code', '__config__').eq('product_code', '__config__')
       .maybeSingle();
-    if (error) { console.warn('loadEditConfig error:', error.message); return; }
+    if (error) { console.warn('loadEditConfig error:', error.message); return; } // stays false
     stockOpeningEditOpen   = !!(data && Number(data.opening_units)   === 1);
     stockSecondaryEditOpen = !!(data && Number(data.secondary_units) === 1);
-  } catch(e) { console.warn('loadEditConfig exception:', e); }
+  } catch(e) { console.warn('loadEditConfig exception:', e); } // stays false
 }
 
 async function saveEditConfig(year, month) {
