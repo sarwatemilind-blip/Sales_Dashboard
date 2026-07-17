@@ -2351,6 +2351,13 @@ async function loadStockStatementData(){
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
+    
+    const beEmpId = normalizeEmpId(stockistRow.be_emp_id_1 || '');
+    const beEmployee = allEmployees.find(e => normalizeEmpId(e.emp_id) === beEmpId) || {};
+    const beName = beEmployee.name ? `${beEmployee.name} (${beEmpId})` : beEmpId;
+    const hqName = stockistRow.hq_name || beEmployee.hq_name || '';
+    const state = beEmployee.state || stockistRow.state || '';
+
     const rows = productCatalog.map(product => {
       const key = `${stockistCode}|${normalizeEmpId(product.product_code)}`;
       const sales = salesMap.get(key) || null;
@@ -2411,6 +2418,9 @@ async function loadStockStatementData(){
       return {
         stockist_code: stockistCode,
         stockist_name: (sales?.stockist_name || saved?.stockist_name || stockistName || '').toString().trim(),
+        beName,
+        hqName,
+        state,
         product_code: product.product_code,
         product_name: product.product_name,
         brand: product.brand,
@@ -2623,6 +2633,9 @@ function downloadStockStatementExcel(){
     const rows = (lastStockStatementData.rows || []).map(row => ({
       "Stockist Code": row.stockist_code,
       "Stockist Name": row.stockist_name,
+      "BE Name": row.beName,
+      "HQ": row.hqName,
+      "State": row.state,
       "Product Code": row.product_code,
       "Product Name": row.product_name,
       "Brand": row.brand,
