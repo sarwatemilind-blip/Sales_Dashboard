@@ -434,10 +434,13 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
     const openingRaw = canEditOpening ? (openingInput?.value ?? '').trim() : '';
     // Secondary: only read from input when its edit is open
     const secondaryRaw = canEditSecondary ? (secondaryInput?.value ?? '').trim() : '';
-    const openingUnits = canEditOpening && openingRaw !== ''
+    // If the input exists on screen and is editable, treat blank as intentional 0
+    const openingInputExists = canEditOpening && openingInput != null;
+    const secondaryInputExists = canEditSecondary && secondaryInput != null;
+    const openingUnits = openingInputExists
       ? (parseFloat(openingRaw) || 0)
       : row.openingUnits;
-    const secondaryUnits = canEditSecondary && secondaryRaw !== ''
+    const secondaryUnits = secondaryInputExists
       ? (parseFloat(secondaryRaw) || 0)
       : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
     const computedTotal = openingUnits + row.primaryUnits;
