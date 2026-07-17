@@ -2353,7 +2353,7 @@ async function loadStockStatementData(){
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
     
     const beEmpId = normalizeEmpId(stockistRow.be_emp_id_1 || '');
-    const beEmployee = allEmployees.find(e => normalizeEmpId(e.emp_id) === beEmpId) || {};
+    const beEmployee = allDownlineEmployees.find(e => normalizeEmpId(e.emp_id) === beEmpId) || {};
     const beName = beEmployee.name ? `${beEmployee.name} (${beEmpId})` : beEmpId;
     const hqName = stockistRow.hq_name || beEmployee.hq_name || '';
     const state = beEmployee.state || stockistRow.state || '';
