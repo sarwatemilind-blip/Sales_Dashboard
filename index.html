@@ -367,6 +367,38 @@ const statementDomKey = (stockistCode, productCode) => encodeURIComponent(`${sto
 let stockOcrState = { file: null, rows: [], stockistCode: '', stockistName: '', status: '' };
 let stockOpeningEditOpen = false;   // synced from DB — admin can unlock Opening Qty for all users
 let stockSecondaryEditOpen = false; // synced from DB — admin can unlock Secondary Sales for all users
+let hiddenStockistCodes = new Set(); // stockist codes hidden by admin from employee views
+
+async function loadHiddenStockists() {
+  hiddenStockistCodes = new Set();
+  try {
+    const { data } = await sb.from('stock_statement_items')
+      .select('stockist_name')
+      .eq('scope_emp_id', '__hidden_stockists__')
+      .eq('stockist_code', '__config__')
+      .eq('product_code', '__config__')
+      .maybeSingle();
+    if (data && data.stockist_name) {
+      data.stockist_name.split(',').map(s => s.trim()).filter(Boolean).forEach(c => hiddenStockistCodes.add(c.toUpperCase()));
+    }
+  } catch(e) { console.warn('loadHiddenStockists error:', e); }
+}
+
+async function saveHiddenStockists(codes) {
+  hiddenStockistCodes = new Set(codes.map(c => c.toUpperCase()));
+  const codesStr = [...hiddenStockistCodes].join(',');
+  const { error } = await sb.from('stock_statement_items').upsert({
+    scope_emp_id: '__hidden_stockists__',
+    stockist_code: '__config__',
+    product_code: '__config__',
+    stockist_name: codesStr,
+    period_year: 0,
+    period_month: 0,
+    updated_by: session?.emp_id || 'admin',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
+  if (error) throw new Error(error.message);
+}
 
 // First month of the stock statement chain (June 2026)
 const STOCK_FIRST_YEAR = 2026;
@@ -2015,7 +2047,11 @@ async function loadStockStatementData(){
 
   body.innerHTML = `<p class="muted">Loading...</p>`;
 
-  const visibleMappings = (await sb.from('stockist_mapping').select('*')).data || [];
+  const allMappings = (await sb.from('stockist_mapping').select('*')).data || [];
+  await loadHiddenStockists();
+  const visibleMappings = session.is_admin
+    ? allMappings
+    : allMappings.filter(row => !hiddenStockistCodes.has(normalizeEmpId(row.stockist_code).toUpperCase()));
   const visibleStockists = visibleMappings.filter(row => {
     const assignees = [
       row.be_emp_id_1, row.be_emp_id_2, row.be_emp_id_3,
@@ -2738,12 +2774,61 @@ function renderAdmin(){
       <div class="progress"><div id="smProgBar"></div></div>
       <div id="smUpStatus" class="small"></div>
     </div>
+
+    <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Manage Hidden Stockists</div>
+      <p class="small">Select stockists to <b>hide</b> from all employee and manager views. They will not appear in the Stock Statement or any dropdown. Admin always sees all stockists.</p>
+      <input type="text" id="stockistSearchInput" placeholder="&#128269; Search stockist name or code..." style="width:100%;padding:8px 10px;margin:10px 0 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;" />
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:300px;margin-bottom:12px;">
+        <div id="hiddenStockistList" style="padding:4px 0;"><span class="muted" style="padding:10px 14px;display:block;">Loading...</span></div>
+      </div>
+      <button id="saveHiddenStockistsBtn" class="btn" style="width:auto;padding:8px 22px;font-size:13px;">&#128274; Save Hidden Stockists</button>
+      <span id="hiddenStockistStatus" class="small" style="margin-left:14px;color:var(--accent);"></span>
+    </div>
   `;
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
   document.getElementById("targetFileInput").onchange = handleTargetUpload;
   document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
+  (async () => {
+    await loadHiddenStockists();
+    const { data: allSm } = await sb.from('stockist_mapping').select('stockist_code, stockist_name').order('stockist_name');
+    const allStockists = (allSm || []).sort((a, b) => (a.stockist_name || a.stockist_code || '').localeCompare(b.stockist_name || b.stockist_code || ''));
+    const renderList = (filter = '') => {
+      const container = document.getElementById('hiddenStockistList');
+      if (!container) return;
+      const filtered = filter
+        ? allStockists.filter(s => (s.stockist_name || s.stockist_code || '').toLowerCase().includes(filter.toLowerCase()) || (s.stockist_code || '').toLowerCase().includes(filter.toLowerCase()))
+        : allStockists;
+      if (!filtered.length) { container.innerHTML = '<span class="muted" style="padding:10px 14px;display:block;">No stockists found.</span>'; return; }
+      container.innerHTML = filtered.map(s => {
+        const code = normalizeEmpId(s.stockist_code).toUpperCase();
+        const checked = hiddenStockistCodes.has(code) ? 'checked' : '';
+        return `<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''"><input type="checkbox" value="${code}" ${checked} style="width:15px;height:15px;cursor:pointer;flex-shrink:0;"><span><b>${s.stockist_name || s.stockist_code}</b> <span class="muted">(${s.stockist_code})</span></span></label>`;
+      }).join('');
+    };
+    renderList();
+    const searchInput = document.getElementById('stockistSearchInput');
+    if (searchInput) searchInput.addEventListener('input', e => renderList(e.target.value));
+    const saveBtn = document.getElementById('saveHiddenStockistsBtn');
+    const statusEl = document.getElementById('hiddenStockistStatus');
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        saveBtn.disabled = true;
+        if (statusEl) statusEl.textContent = 'Saving...';
+        try {
+          const checkboxes = document.querySelectorAll('#hiddenStockistList input[type=checkbox]:checked');
+          const codes = [...checkboxes].map(cb => cb.value);
+          await saveHiddenStockists(codes);
+          if (statusEl) statusEl.textContent = `✓ Saved. ${codes.length} stockist(s) hidden.`;
+        } catch(e) {
+          if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+        }
+        saveBtn.disabled = false;
+      };
+    }
+  })();
 }
 
 function parseBillDate(val) {
