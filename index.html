@@ -2193,22 +2193,41 @@ async function loadStockStatementData(){
   for (const r of currentSavedRows) {
     const key = `${normalizeEmpId(r.stockist_code)}|${normalizeEmpId(r.product_code)}`;
     const existing = currentSavedMap.get(key);
+    const isROverall = r.scope_emp_id === 'overall';
+    const isEOverall = existing && existing.scope_emp_id === 'overall';
+
     if (!existing) {
-      currentSavedMap.set(key, r);
+      // First record for this key — store a copy so we can accumulate into it
+      currentSavedMap.set(key, { ...r });
+    } else if (isROverall && !isEOverall) {
+      // Incoming is overall, existing is BE-specific:
+      // Only replace if the summed BE data is all zeros (i.e. no real BE entries yet)
+      const eTotal = (parseFloat(existing.opening_units) || 0) + (parseFloat(existing.secondary_units) || 0);
+      const rTotal = (parseFloat(r.opening_units) || 0) + (parseFloat(r.secondary_units) || 0);
+      if (eTotal === 0 && rTotal > 0) {
+        currentSavedMap.set(key, { ...r });
+      }
+      // else keep the BE-summed data
+    } else if (!isROverall && isEOverall) {
+      // Incoming is BE-specific, existing is overall:
+      // Only replace if the incoming BE data is non-zero
+      const rTotal = (parseFloat(r.opening_units) || 0) + (parseFloat(r.secondary_units) || 0);
+      if (rTotal > 0) {
+        currentSavedMap.set(key, { ...r });
+      }
+      // else keep the overall record
+    } else if (!isROverall && !isEOverall) {
+      // Both are BE-specific records (different BEs for the same stockist+product)
+      // SUM them together for the manager's rolled-up view
+      const acc = currentSavedMap.get(key);
+      acc.opening_units = (parseFloat(acc.opening_units) || 0) + (parseFloat(r.opening_units) || 0);
+      acc.secondary_units = (parseFloat(acc.secondary_units) || 0) + (parseFloat(r.secondary_units) || 0);
+      acc.scope_emp_id = 'rolled_up';
     } else {
+      // Both are overall — keep whichever is non-zero or the latest
       const rTotal = (parseFloat(r.opening_units) || 0) + (parseFloat(r.secondary_units) || 0);
       const eTotal = (parseFloat(existing.opening_units) || 0) + (parseFloat(existing.secondary_units) || 0);
-      
-      const isROverall = r.scope_emp_id === 'overall';
-      const isEOverall = existing.scope_emp_id === 'overall';
-
-      if (isROverall && !isEOverall && rTotal > 0 && eTotal === 0) {
-        currentSavedMap.set(key, r);
-      } else if (!isROverall && isEOverall && eTotal > 0 && rTotal === 0) {
-        // keep existing
-      } else if (rTotal > eTotal || (rTotal === eTotal && isROverall)) {
-        currentSavedMap.set(key, r);
-      }
+      if (rTotal > eTotal) currentSavedMap.set(key, { ...r });
     }
   }
   // Build prevSavedMap: for each stockist+product key, pick the row with the best (non-zero) closing_units
