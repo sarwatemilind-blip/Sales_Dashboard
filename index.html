@@ -423,9 +423,8 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   const targetYear = lastStockStatementData.year || currentYear;
   const targetMonth = lastStockStatementData.month || currentMonth;
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  const isManager = session.designation !== 'BE';
-  const canEditOpening = isFirstMonth || stockOpeningEditOpen || isManager;
-  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen || isManager;
+  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
+  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
   const payloads = [];
   for (const row of rows) {
     const rowKey = statementDomKey(row.stockist_code, row.product_code);
@@ -446,8 +445,7 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
       : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
     const computedTotal = openingUnits + row.primaryUnits;
     payloads.push({
-      // Managers save under their own emp_id to avoid overwriting individual BE records
-      scope_emp_id: isManager ? session.emp_id : (row.emp_id || scopeKey),
+      scope_emp_id: (row.emp_id && row.emp_id !== 'rolled_up') ? row.emp_id : scopeKey,
       period_year: targetYear,
       period_month: targetMonth,
       stockist_code: row.stockist_code,
@@ -2301,11 +2299,10 @@ async function loadStockStatementData(){
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  // Opening editable: first month (June 2026) OR admin opened Opening edit OR user is not a BE (managers always can edit)
-  const isManager = session.designation !== 'BE';
-  const canEditOpening = isFirstMonth || stockOpeningEditOpen || isManager;
-  // Secondary editable: first month (June 2026) OR admin opened Secondary edit OR user is not a BE (managers always can edit)
-  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen || isManager;
+  // Opening editable: first month (June 2026) OR admin opened Opening edit
+  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
+  // Secondary editable: first month (June 2026) OR admin opened Secondary edit
+  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
