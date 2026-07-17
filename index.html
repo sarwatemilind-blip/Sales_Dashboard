@@ -425,16 +425,15 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
   const canEditOpening = isFirstMonth || stockOpeningEditOpen;
   const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
+  const isManager = session.designation !== 'BE';
+  const now = new Date().toISOString();
   const payloads = [];
   for (const row of rows) {
     const rowKey = statementDomKey(row.stockist_code, row.product_code);
     const openingInput = document.getElementById(`stockOpening_${rowKey}`);
     const secondaryInput = document.getElementById(`stockSecondary_${rowKey}`);
-    // Opening: only read from input when its edit is open
     const openingRaw = canEditOpening ? (openingInput?.value ?? '').trim() : '';
-    // Secondary: only read from input when its edit is open
     const secondaryRaw = canEditSecondary ? (secondaryInput?.value ?? '').trim() : '';
-    // If the input exists on screen and is editable, treat blank as intentional 0
     const openingInputExists = canEditOpening && openingInput != null;
     const secondaryInputExists = canEditSecondary && secondaryInput != null;
     const openingUnits = openingInputExists
@@ -444,27 +443,42 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
       ? (parseFloat(secondaryRaw) || 0)
       : (row.saved ? (parseFloat(row.secondaryUnits) || 0) : 0);
     const computedTotal = openingUnits + row.primaryUnits;
-    payloads.push({
-      scope_emp_id: (row.emp_id && row.emp_id !== 'rolled_up') ? row.emp_id : scopeKey,
-      period_year: targetYear,
-      period_month: targetMonth,
-      stockist_code: row.stockist_code,
-      stockist_name: row.stockist_name,
-      product_code: row.product_code,
-      product_name: row.product_name,
-      brand: row.brand,
-      opening_units: Number.isFinite(openingUnits) ? openingUnits : 0,
-      primary_units: row.primaryUnits,
-      primary_value: row.primaryValue,
-      sale_rate: row.saleRate,
-      total_units: computedTotal,
-      secondary_units: secondaryUnits,
-      secondary_value: secondaryUnits * row.saleRate,
-      closing_units: computedTotal - secondaryUnits,
-      closing_value: (computedTotal - secondaryUnits) * row.saleRate,
-      updated_by: session.emp_id,
-      updated_at: new Date().toISOString()
-    });
+    // Determine which scope_emp_ids to write to.
+    // For managers viewing rolled-up data: write to ALL contributing BE scopes so
+    // old BE records are overwritten and cannot re-emerge on reload.
+    // For a single BE scope (or 'overall'): just write to that scope.
+    let scopesToWrite;
+    if (isManager && row.contributingScopes && row.contributingScopes.length > 1) {
+      scopesToWrite = row.contributingScopes;
+    } else {
+      const singleScope = (row.contributingScopes && row.contributingScopes[0] && row.contributingScopes[0] !== 'rolled_up')
+        ? row.contributingScopes[0]
+        : scopeKey;
+      scopesToWrite = [singleScope];
+    }
+    for (const scope of scopesToWrite) {
+      payloads.push({
+        scope_emp_id: scope,
+        period_year: targetYear,
+        period_month: targetMonth,
+        stockist_code: row.stockist_code,
+        stockist_name: row.stockist_name,
+        product_code: row.product_code,
+        product_name: row.product_name,
+        brand: row.brand,
+        opening_units: Number.isFinite(openingUnits) ? openingUnits : 0,
+        primary_units: row.primaryUnits,
+        primary_value: row.primaryValue,
+        sale_rate: row.saleRate,
+        total_units: computedTotal,
+        secondary_units: secondaryUnits,
+        secondary_value: secondaryUnits * row.saleRate,
+        closing_units: computedTotal - secondaryUnits,
+        closing_value: (computedTotal - secondaryUnits) * row.saleRate,
+        updated_by: session.emp_id,
+        updated_at: now
+      });
+    }
   }
   if (!payloads.length) {
     if (!silent) alert('Nothing to save.');
@@ -2199,30 +2213,30 @@ async function loadStockStatementData(){
     const eTime = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
 
     if (!existing) {
-      // First record for this key
-      currentSavedMap.set(key, { ...r });
+      currentSavedMap.set(key, { ...r, _scopes: [r.scope_emp_id] });
     } else if (!isROverall && !isEOverall) {
-      // Both are BE-specific records — SUM them for roll-up
-      // But if one was saved AFTER the other, the newer one wins outright (manager corrected a BE)
+      // Both are BE-specific records
       if (rTime > eTime + 1000) {
         // Incoming is clearly newer — replace
-        currentSavedMap.set(key, { ...r });
+        currentSavedMap.set(key, { ...r, _scopes: [r.scope_emp_id] });
       } else if (eTime > rTime + 1000) {
-        // Existing is clearly newer — keep
+        // Existing is clearly newer — keep but add this scope
+        existing._scopes = existing._scopes || [];
+        if (!existing._scopes.includes(r.scope_emp_id)) existing._scopes.push(r.scope_emp_id);
       } else {
-        // Saved around the same time — sum them (normal multi-BE roll-up)
+        // Same time — sum them (normal multi-BE roll-up)
         const acc = currentSavedMap.get(key);
         acc.opening_units = (parseFloat(acc.opening_units) || 0) + (parseFloat(r.opening_units) || 0);
         acc.secondary_units = (parseFloat(acc.secondary_units) || 0) + (parseFloat(r.secondary_units) || 0);
         acc.scope_emp_id = 'rolled_up';
+        acc._scopes = acc._scopes || [];
+        if (!acc._scopes.includes(r.scope_emp_id)) acc._scopes.push(r.scope_emp_id);
       }
     } else {
-      // One or both are 'overall' — use timestamp to decide winner
-      // Most recently saved record wins (manager override beats old BE data, new BE data beats old manager override)
+      // One or both are 'overall' — most recently saved wins
       if (rTime >= eTime) {
-        currentSavedMap.set(key, { ...r });
+        currentSavedMap.set(key, { ...r, _scopes: [r.scope_emp_id] });
       }
-      // else keep existing
     }
   }
   // Build prevSavedMap: for each stockist+product key, pick the row with the best (non-zero) closing_units
@@ -2379,6 +2393,7 @@ async function loadStockStatementData(){
         openingDisplay,
         secondaryDisplay,
         saved: !!saved,
+        contributingScopes: saved?._scopes || (saved ? [saved.scope_emp_id] : []),
         key
       };
     }).sort((a, b) => a.product_name.localeCompare(b.product_name));
