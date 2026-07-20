@@ -2920,7 +2920,8 @@ async function handleUpload(e){
   const colMrName = findColIdx(["MR Name", "mr_name", "Emp Name"]);
   const colRawProductCode = findColIdx(["Product Code", "raw_product_code", "Item Code"]);
   const colRawProductName = findColIdx(["Product Name", "raw_product_name", "Item Name"]);
-  const colQuantity = findColIdx(["Quantity", "quantity", "Qty"]);
+  const colQuantity = findColIdx(["Quantity", "quantity", "Qty", "Billed Qty"]);
+  const colFreeQty = findColIdx(["Free Qty", "free qty", "Free", "Free Quantity"]);
   const colAmount = findColIdx(["Amount", "amount", "Value", "Net Amount"]);
 
   if (colStockistCode === -1 || colAmount === -1) {
@@ -2939,9 +2940,11 @@ async function handleUpload(e){
   const out = [];
   const periodsToClear = new Set();
   for (const r of dataRows) {
-    const quantity = colQuantity !== -1 ? r[colQuantity] : 0;
+    const quantityBase = colQuantity !== -1 ? parseFloat(r[colQuantity]) || 0 : 0;
+    const freeQty = colFreeQty !== -1 ? parseFloat(r[colFreeQty]) || 0 : 0;
+    const quantity = quantityBase + freeQty;
     const amount = colAmount !== -1 ? r[colAmount] : 0;
-    if (quantity == null && amount == null) continue;
+    if (quantity === 0 && amount == null) continue;
     
     const rawCode = colRawProductCode !== -1 ? (r[colRawProductCode]||"").toString().trim() : "";
     const club = clubMap[rawCode];
@@ -2973,7 +2976,7 @@ async function handleUpload(e){
       raw_product_name: colRawProductName !== -1 ? r[colRawProductName] : null,
       brand: club ? club.canonical_brand : (colRawProductName !== -1 ? r[colRawProductName] : null),
       canonical_product_code: club ? club.canonical_product_code : rawCode,
-      quantity: parseFloat(quantity)||0,
+      quantity: quantity,
       amount: parseFloat(amount)||0,
       uploaded_by: session.emp_id,
     });
