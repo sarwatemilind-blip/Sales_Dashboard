@@ -1359,8 +1359,8 @@ async function loadDashboardData(){
   const mtdRatio = elapsedDays / daysInMonth;
 
   let targetMultiplier = 1.0;
-  let filteredAch = ach.filter(r => parseFloat(r.amount) > 0);
-  let filteredLastYear = lastYear.filter(r => parseFloat(r.amount) > 0);
+  let filteredAch = ach.filter(r => parseFloat(r.amount) !== 0);
+  let filteredLastYear = lastYear.filter(r => parseFloat(r.amount) !== 0);
 
   if (currentView === 'mtd') {
     filteredAch = ach.filter(r => !r.bill_date || r.bill_date <= todayStr);
