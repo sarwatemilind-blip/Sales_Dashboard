@@ -2344,10 +2344,10 @@ async function loadStockStatementData(){
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  // Opening editable: first month (June 2026) OR admin opened Opening edit
-  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
-  // Secondary editable: first month (June 2026) OR admin opened Secondary edit
-  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
+  // Opening editable ONLY if first month AND admin opened Opening edit
+  const canEditOpening = isFirstMonth && stockOpeningEditOpen;
+  // Secondary editable ONLY if admin opened Secondary edit
+  const canEditSecondary = stockSecondaryEditOpen;
   const groups = stockistCatalog.map(stockistRow => {
     const stockistCode = normalizeEmpId(stockistRow.stockist_code);
     const stockistName = (stockistRow.stockist_name || stockistRow.stockist_code || '').toString().trim();
