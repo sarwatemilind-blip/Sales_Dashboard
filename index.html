@@ -1359,8 +1359,8 @@ async function loadDashboardData(){
   const mtdRatio = elapsedDays / daysInMonth;
 
   let targetMultiplier = 1.0;
-  let filteredAch = ach.filter(r => parseFloat(r.amount) !== 0);
-  let filteredLastYear = lastYear.filter(r => parseFloat(r.amount) !== 0);
+  let filteredAch = ach.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)'));
 
   if (currentView === 'mtd') {
     filteredAch = ach.filter(r => !r.bill_date || r.bill_date <= todayStr);
@@ -2995,8 +2995,8 @@ async function handleUpload(e){
         mr_emp_id: colMrEmpId !== -1 ? r[colMrEmpId] : null,
         mr_name: colMrName !== -1 ? r[colMrName] : null,
         raw_product_code: rawCode ? rawCode + "-FREE" : "-FREE",
-        raw_product_name: colRawProductName !== -1 ? r[colRawProductName] : null,
-        brand: club ? club.canonical_brand : (colRawProductName !== -1 ? r[colRawProductName] : null),
+        raw_product_name: colRawProductName !== -1 && r[colRawProductName] ? r[colRawProductName] + " (FREE)" : null,
+        brand: club && club.canonical_brand ? club.canonical_brand + " (FREE)" : (colRawProductName !== -1 && r[colRawProductName] ? r[colRawProductName] + " (FREE)" : "(FREE)"),
         canonical_product_code: club ? club.canonical_product_code : rawCode,
         quantity: freeQty,
         amount: 0,
