@@ -6,10 +6,10 @@ select
   s.id as sale_id, s.period_year, s.period_month, s.bill_date,
   s.stockist_code, s.hq_code, s.hq_name, s.brand, s.canonical_product_code,
   be.emp_id as be_emp_id,
-  s.quantity / be.n as quantity, s.amount / be.n as amount
+  s.quantity / coalesce(nullif(be.n, 0), 1) as quantity, s.amount / coalesce(nullif(be.n, 0), 1) as amount
 from sales s
-join stockist_mapping m on m.stockist_code = s.stockist_code
-cross join lateral (
+left join stockist_mapping m on m.stockist_code = s.stockist_code
+left join lateral (
   -- If BEs exist, split among them. Otherwise fall back to ASM → RSM → ZM → VP.
   select emp_id, count(*) over () as n from (
     -- Case 1: at least one BE is assigned — use BE(s)
@@ -26,4 +26,4 @@ cross join lateral (
     where coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is null
   ) t(emp_id)
   where emp_id is not null and emp_id <> ''
-) be;
+) be on true;
