@@ -1322,13 +1322,13 @@ async function loadDashboardData(){
   async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal) {
     let allData = [];
     let from = 0;
-    const orderCol = tableName === 'targets' ? 'id' : 'sale_id';
+    const orderCol = tableName === 'targets' || tableName === 'sales' ? 'id' : 'sale_id';
     while (true) {
-      const { data, error } = await sb.from(tableName)
-        .select('*')
-        .in(filterCol, activeScopeIds)
-        .eq(yearCol, yVal)
-        .in(monthCol, monthsVal)
+      let query = sb.from(tableName).select('*').eq(yearCol, yVal).in(monthCol, monthsVal);
+      if (selectedEmpId !== 'overall') {
+        query = query.in(filterCol, activeScopeIds);
+      }
+      const { data, error } = await query
         .order(orderCol)
         .range(from, from + 999);
       if (error) {
@@ -1342,10 +1342,13 @@ async function loadDashboardData(){
     return allData;
   }
 
+  const salesTable = selectedEmpId === 'overall' ? 'sales' : 'sales_attributed';
+  const salesFilterCol = selectedEmpId === 'overall' ? 'period_year' : 'be_emp_id'; // Dummy col
+
   const [tgt, ach, lastYear] = await Promise.all([
     fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, months)
+    fetchAllRows(salesTable, salesFilterCol, 'period_year', 'period_month', currentYear, months),
+    fetchAllRows(salesTable, salesFilterCol, 'period_year', 'period_month', currentYear - 1, months)
   ]);
 
   // Setup Date / MTD prorating constants
@@ -2340,6 +2343,24 @@ async function loadStockStatementData(){
   });
 
   let stockistCatalog = visibleStockistList;
+
+  // Dynamically append any unmapped stockists found in sales so they are not dropped from the Stock Statement!
+  if (selectedEmpId === 'overall') {
+    const knownCodes = new Set(stockistCatalog.map(s => normalizeEmpId(s.stockist_code)));
+    const unmapped = new Map();
+    salesMap.forEach(s => {
+      const c = normalizeEmpId(s.stockist_code);
+      if (!knownCodes.has(c)) {
+        unmapped.set(c, {
+          stockist_code: s.stockist_code,
+          stockist_name: s.stockist_name || 'Unmapped Stockist',
+          hq_name: s.hq_name || 'UNKNOWN'
+        });
+      }
+    });
+    stockistCatalog = stockistCatalog.concat(Array.from(unmapped.values()));
+  }
+
   if (selectedStockistCode !== 'all') {
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
@@ -2398,8 +2419,8 @@ async function loadStockStatementData(){
       // Use the uniform market rate from product master to ensure identical saleRate across all months
       const saleRate = marketRate;
       
-      // Calculate primary value using the uniform sale rate to match closing value logic
-      const primaryValue = primaryUnits * saleRate;
+      // Use the raw primary value directly from sales to guarantee exact matching with Excel upload
+      const primaryValue = rawPrimaryValue;
       const totalUnits = openingUnits + primaryUnits;
       const secondaryUnits = saved && saved.secondary_units != null ? parseFloat(saved.secondary_units) || 0 : 0;
       // Opening value is always based on opening units and the consistent saleRate
