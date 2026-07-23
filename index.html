@@ -1318,38 +1318,39 @@ async function loadDashboardData(){
     periodLabel = monthLabel(currentMonth);
   }
 
-  // Helper to fetch all rows using pagination (overcoming the 1000-row PostgREST limit)
-  async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal) {
-    let allData = [];
+  async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal, applyScopeFilter = false) {
+    let allRows = [];
     let from = 0;
     const orderCol = tableName === 'targets' || tableName === 'sales' ? 'id' : 'sale_id';
     while (true) {
       let query = sb.from(tableName).select('*').eq(yearCol, yVal).in(monthCol, monthsVal);
-      if (selectedEmpId !== 'overall') {
+      if (applyScopeFilter) {
         query = query.in(filterCol, activeScopeIds);
       }
-      const { data, error } = await query
-        .order(orderCol)
-        .range(from, from + 999);
+      const { data, error } = await query.order(orderCol, { ascending: true }).range(from, from + 999);
       if (error) {
         console.error("Error loading " + tableName, error);
         break;
       }
-      allData = allData.concat(data);
+      allRows = allRows.concat(data);
       if (data.length < 1000) break;
       from += 1000;
     }
-    return allData;
+    return allRows;
   }
 
-  const salesTable = selectedEmpId === 'overall' ? 'sales' : 'sales_attributed';
-  const salesFilterCol = selectedEmpId === 'overall' ? 'period_year' : 'be_emp_id'; // Dummy col
+  const isCompanyOverall = selectedEmpId === 'overall' && session.designation === 'ADMIN';
 
-  const [tgt, ach, lastYear] = await Promise.all([
-    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months),
-    fetchAllRows(salesTable, salesFilterCol, 'period_year', 'period_month', currentYear, months),
-    fetchAllRows(salesTable, salesFilterCol, 'period_year', 'period_month', currentYear - 1, months)
+  const [tgt, achAttr, lastYearAttr, achRaw, lastYearRaw] = await Promise.all([
+    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months, true),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months, true),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, months, true),
+    isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear, months, false) : Promise.resolve([]),
+    isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear - 1, months, false) : Promise.resolve([])
   ]);
+
+  const ach = isCompanyOverall ? achRaw : achAttr;
+  const lastYear = isCompanyOverall ? lastYearRaw : lastYearAttr;
 
   // Setup Date / MTD prorating constants
   const todayDateObj = new Date();
@@ -1362,12 +1363,18 @@ async function loadDashboardData(){
   const mtdRatio = elapsedDays / daysInMonth;
 
   let targetMultiplier = 1.0;
+  let filteredAchAttr = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  let filteredLastYearAttr = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  
   let filteredAch = ach.filter(r => !(r.brand || '').endsWith('(FREE)'));
   let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)'));
 
   if (currentView === 'mtd') {
-    filteredAch = ach.filter(r => !r.bill_date || r.bill_date <= todayStr);
-    filteredLastYear = lastYear.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
+    filteredAchAttr = filteredAchAttr.filter(r => !r.bill_date || r.bill_date <= todayStr);
+    filteredLastYearAttr = filteredLastYearAttr.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
+    
+    filteredAch = filteredAch.filter(r => !r.bill_date || r.bill_date <= todayStr);
+    filteredLastYear = filteredLastYear.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
   }
 
   const sum = (rows, key) => rows.reduce((a,r) => a + (parseFloat(r[key])||0), 0);
@@ -1490,7 +1497,7 @@ async function loadDashboardData(){
       }
     });
 
-    filteredAch.forEach(r => {
+    filteredAchAttr.forEach(r => {
       const entry = teamMap[r.be_emp_id];
       if (entry) {
         const cat = getBrandCategory(r.brand).toLowerCase();
@@ -1507,7 +1514,7 @@ async function loadDashboardData(){
       }
     });
 
-    filteredLastYear.forEach(r => {
+    filteredLastYearAttr.forEach(r => {
       const entry = teamMap[r.be_emp_id];
       if (entry) {
         const cat = getBrandCategory(r.brand).toLowerCase();
