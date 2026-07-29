@@ -1574,8 +1574,13 @@ async function loadDashboardData(){
   let teamHtml = "";
   lastDashboardData.team = [];
   if (session.designation !== 'BE' && activeScopeIds.length > 1) {
-    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds);
+    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
     const teamMap = {};
+    // Normalise HQ name: strip " (Vacant BE)" so targets & achievement merge under the same key
+    const normalizeHqName = (hq) => {
+      if (!hq) return 'Unknown';
+      return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
+    };
     (team||[]).forEach(e => teamMap[e.emp_id] = {
       emp: e,
       pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
@@ -1606,12 +1611,12 @@ async function loadDashboardData(){
       let empId = r.be_emp_id;
       let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
       if (empInfo && empInfo.designation !== 'BE') {
-        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+        let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
       }
       if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-          let hq = r.hq_name || 'Unknown';
+          let hq = normalizeHqName(r.hq_name);
           if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
           if (!teamMap[empId]) {
             teamMap[empId] = {
@@ -1622,7 +1627,7 @@ async function loadDashboardData(){
             };
           }
       } else if (!teamMap[empId]) {
-        let hq = r.hq_name || 'Unknown';
+        let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
         if (!teamMap[empId]) {
@@ -1659,12 +1664,12 @@ async function loadDashboardData(){
       let empId = r.be_emp_id;
       let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
       if (empInfo && empInfo.designation !== 'BE') {
-        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+        let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
       }
       if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-          let hq = r.hq_name || 'Unknown';
+          let hq = normalizeHqName(r.hq_name);
           if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
           if (!teamMap[empId]) {
             teamMap[empId] = {
@@ -1675,7 +1680,7 @@ async function loadDashboardData(){
             };
           }
       } else if (!teamMap[empId]) {
-        let hq = r.hq_name || 'Unknown';
+        let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
         if (!teamMap[empId]) {
@@ -3770,8 +3775,13 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const filteredLastYear = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
 
   const teamMap = {};
+  // Normalise HQ name (shared with loadDashboardData logic)
+  const normalizeHqName = (hq) => {
+    if (!hq) return 'Unknown';
+    return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
+  };
   allDownlineEmployees.forEach(e => {
-    if (activeScopeIds.includes(e.emp_id)) {
+    if (activeScopeIds.includes(e.emp_id) && e.designation === 'BE') {
       const hNames = getHierarchyNames(e.emp_id, e.state);
       teamMap[e.emp_id] = { emp: { ...e, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm, state: hNames.state }, data: {} };
     }
@@ -3780,19 +3790,19 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const getGroup = (emp_id, view, month, r) => {
     let empId = emp_id;
     let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
-      if (empInfo && empInfo.designation !== 'BE') {
-        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
-        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
-      }
+    if (empInfo && empInfo.designation !== 'BE') {
+      let hq = normalizeHqName(r ? r.hq_name : null);
+      if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+      empId = 'VACANT_' + hq;
+    }
     if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-      let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      let hq = normalizeHqName(r ? r.hq_name : null);
       if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
       if (!teamMap[empId]) {
         teamMap[empId] = { emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, region: '-' }, data: {} };
       }
     } else if (!teamMap[empId]) {
-      let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      let hq = normalizeHqName(r ? r.hq_name : null);
       if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
       empId = 'VACANT_' + hq;
       if (!teamMap[empId]) {
