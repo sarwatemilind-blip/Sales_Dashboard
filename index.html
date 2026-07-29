@@ -1424,7 +1424,7 @@ async function loadDashboardData(){
     return allRows;
   }
 
-  const isCompanyOverall = selectedEmpId === 'overall' && session.designation === 'ADMIN';
+  const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
   const [tgt, achAttr, lastYearAttr, achRaw, lastYearRaw] = await Promise.all([
     fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months, true),
@@ -3655,7 +3655,7 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     return allRows;
   }
 
-  const isCompanyOverall = selectedEmpId === 'overall' && session.designation === 'ADMIN';
+  const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
   const [tgt, achAttr, lastYearAttr] = await Promise.all([
     fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, monthsVal, true),
