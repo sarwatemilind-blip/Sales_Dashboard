@@ -1605,6 +1605,11 @@ async function loadDashboardData(){
     filteredAchAttr.forEach(r => {
       let empId = r.be_emp_id;
       let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+      if (empInfo && empInfo.designation !== 'BE') {
+        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+        empId = 'VACANT_' + hq;
+      }
       if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
           let hq = r.hq_name || 'Unknown';
           if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
@@ -1627,7 +1632,7 @@ async function loadDashboardData(){
           const fallbackState = peer ? (peer.state || '-') : '-';
           const hNames = getHierarchyNames(r.be_emp_id, fallbackState);
           teamMap[empId] = {
-            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
+            emp: { emp_id: empId, name: hq + '_Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
             pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
@@ -1653,6 +1658,11 @@ async function loadDashboardData(){
     filteredLastYearAttr.forEach(r => {
       let empId = r.be_emp_id;
       let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+      if (empInfo && empInfo.designation !== 'BE') {
+        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+        empId = 'VACANT_' + hq;
+      }
       if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
           let hq = r.hq_name || 'Unknown';
           if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
@@ -1675,7 +1685,7 @@ async function loadDashboardData(){
           const fallbackState = peer ? (peer.state || '-') : '-';
           const hNames = getHierarchyNames(r.be_emp_id, fallbackState);
           teamMap[empId] = {
-            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
+            emp: { emp_id: empId, name: hq + '_Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
             pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
@@ -3770,6 +3780,11 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const getGroup = (emp_id, view, month, r) => {
     let empId = emp_id;
     let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+      if (empInfo && empInfo.designation !== 'BE') {
+        let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+        empId = 'VACANT_' + hq;
+      }
     if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
       let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
       if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
@@ -3787,7 +3802,7 @@ async function loadMultiCompareData(activeScopeIds, pill) {
         const fallbackState = peer ? (peer.state || '-') : '-';
         const hNames = getHierarchyNames(emp_id, fallbackState);
         teamMap[empId] = {
-          emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: (r && r.hq_code) ? r.hq_code : '', state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
+          emp: { emp_id: empId, name: hq + '_Vacant', designation: 'BE', hq_name: hq, hq_code: (r && r.hq_code) ? r.hq_code : '', state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
           data: {}
         };
       }
