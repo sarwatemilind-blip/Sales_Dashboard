@@ -1609,24 +1609,8 @@ async function loadDashboardData(){
 
     filteredAchAttr.forEach(r => {
       let empId = r.be_emp_id;
-      let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
-      if (empInfo && empInfo.designation !== 'BE') {
-        let hq = normalizeHqName(r.hq_name);
-        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
-      }
-      if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-          let hq = normalizeHqName(r.hq_name);
-          if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-          if (!teamMap[empId]) {
-            teamMap[empId] = {
-              emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: '-', region: '-', asm_name: '-', rsm_name: '-', zsm_name: '-' },
-              pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-              others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-              total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
-            };
-          }
-      } else if (!teamMap[empId]) {
+      if (!teamMap[empId]) {
+        // emp not a known BE → route to Vacant HQ using the sale's hq_name
         let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
@@ -1662,24 +1646,7 @@ async function loadDashboardData(){
 
     filteredLastYearAttr.forEach(r => {
       let empId = r.be_emp_id;
-      let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
-      if (empInfo && empInfo.designation !== 'BE') {
-        let hq = normalizeHqName(r.hq_name);
-        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
-      }
-      if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-          let hq = normalizeHqName(r.hq_name);
-          if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-          if (!teamMap[empId]) {
-            teamMap[empId] = {
-              emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: '-', region: '-', asm_name: '-', rsm_name: '-', zsm_name: '-' },
-              pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-              others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-              total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
-            };
-          }
-      } else if (!teamMap[empId]) {
+      if (!teamMap[empId]) {
         let hq = normalizeHqName(r.hq_name);
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
@@ -3789,21 +3756,20 @@ async function loadMultiCompareData(activeScopeIds, pill) {
 
   const getGroup = (emp_id, view, month, r) => {
     let empId = emp_id;
-    let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
-    if (empInfo && empInfo.designation !== 'BE') {
-      let hq = normalizeHqName(r ? r.hq_name : null);
+    if (!teamMap[empId]) {
+      // emp not a known BE → route to Vacant HQ
+      // r may be a sales record (has hq_name) or a target record (hq_name may be absent)
+      const rawHq = r ? r.hq_name : null;
+      let hq = normalizeHqName(rawHq);
       if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-      empId = 'VACANT_' + hq;
-    }
-    if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
-      let hq = normalizeHqName(r ? r.hq_name : null);
-      if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-      if (!teamMap[empId]) {
-        teamMap[empId] = { emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, region: '-' }, data: {} };
+      if (hq === 'Unknown' && !rawHq) {
+        // target record has no hq_name – look up from allDownlineEmployees
+        const empRec = allDownlineEmployees.find(e => e.emp_id === emp_id);
+        if (empRec && empRec.hq_name) {
+          hq = normalizeHqName(empRec.hq_name);
+          if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+        }
       }
-    } else if (!teamMap[empId]) {
-      let hq = normalizeHqName(r ? r.hq_name : null);
-      if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
       empId = 'VACANT_' + hq;
       if (!teamMap[empId]) {
         let region = '';
