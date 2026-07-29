@@ -1294,6 +1294,10 @@ async function renderDashboard(){
   }
 
   const updateSelectorStates = () => {
+    const multiUI = document.getElementById("multiCompareUI");
+    if (multiUI) multiUI.style.display = currentView === 'multi' ? 'flex' : 'none';
+    if (monthSel) monthSel.style.display = currentView === 'multi' ? 'none' : 'inline-block';
+
     if (currentView === 'mtd') {
       const cy = getFiscalYearStart(new Date());
       let cm = getFiscalMonthNum(new Date());
