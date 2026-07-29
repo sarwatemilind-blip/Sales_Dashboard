@@ -279,10 +279,6 @@ function renderLogin(errorMsg, mode = "employee"){
     const fallbackAdmin = password === DEFAULT_ADMIN_PASSWORD && (
       !emp_id || emp_id === DEFAULT_ADMIN.emp_id
     );
-    if (emp_id === 'ADLA02') {
-      renderLogin("That account is set up for employee login only.", "admin");
-      return;
-    }
     if (!account && !fallbackAdmin) {
       renderLogin("Invalid admin ID or password.", "admin");
       return;
