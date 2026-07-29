@@ -1587,7 +1587,25 @@ async function loadDashboardData(){
     });
 
     filteredAchAttr.forEach(r => {
-      const entry = teamMap[r.be_emp_id];
+      let empId = r.be_emp_id;
+      let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
+      if (!empInfo || empInfo.designation !== 'BE') {
+        const hq = r.hq_name || 'Unknown';
+        empId = 'VACANT_' + hq;
+        if (!teamMap[empId]) {
+          let state = '-';
+          let region = '';
+          const peer = allDownlineEmployees.find(e => e.hq_name === hq);
+          if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+          teamMap[empId] = {
+            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: state, region: region },
+            pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+            others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+            total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+          };
+        }
+      }
+      const entry = teamMap[empId];
       if (entry) {
         const cat = getBrandCategory(r.brand).toLowerCase();
         const val = parseFloat(r.amount)||0;
@@ -1604,7 +1622,25 @@ async function loadDashboardData(){
     });
 
     filteredLastYearAttr.forEach(r => {
-      const entry = teamMap[r.be_emp_id];
+      let empId = r.be_emp_id;
+      let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
+      if (!empInfo || empInfo.designation !== 'BE') {
+        const hq = r.hq_name || 'Unknown';
+        empId = 'VACANT_' + hq;
+        if (!teamMap[empId]) {
+          let state = '-';
+          let region = '';
+          const peer = allDownlineEmployees.find(e => e.hq_name === hq);
+          if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+          teamMap[empId] = {
+            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: state, region: region },
+            pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+            others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+            total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+          };
+        }
+      }
+      const entry = teamMap[empId];
       if (entry) {
         const cat = getBrandCategory(r.brand).toLowerCase();
         const val = parseFloat(r.amount)||0;
@@ -3684,11 +3720,27 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     }
   });
 
-  const getGroup = (emp_id, view, month) => {
-    if (!teamMap[emp_id]) return null;
+  const getGroup = (emp_id, view, month, r) => {
+    let empId = emp_id;
+    let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+    if (!empInfo || empInfo.designation !== 'BE') {
+      const hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      empId = 'VACANT_' + hq;
+      if (!teamMap[empId]) {
+        let state = '-';
+        let region = '';
+        const peer = allDownlineEmployees.find(e => e.hq_name === hq);
+        if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+        teamMap[empId] = {
+          emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: (r && r.hq_code) ? r.hq_code : '', state: state, region: region },
+          data: {}
+        };
+      }
+    }
+    if (!teamMap[empId]) return null;
     const key = view + '_' + month;
-    if (!teamMap[emp_id].data[key]) teamMap[emp_id].data[key] = { target: 0, ach: 0, lastYear: 0 };
-    return teamMap[emp_id].data[key];
+    if (!teamMap[empId].data[key]) teamMap[empId].data[key] = { target: 0, ach: 0, lastYear: 0 };
+    return teamMap[empId].data[key];
   };
 
   const todayDateObj = new Date();
@@ -3707,22 +3759,22 @@ async function loadMultiCompareData(activeScopeIds, pill) {
 
     mcSelectedMonths.forEach(sm => {
       if (mcSelectedViews.includes('monthly') && m === sm) {
-        const g = getGroup(empId, 'monthly', sm);
+        const g = getGroup(empId, 'monthly', sm, r);
         if (g) g.target += val;
       }
       if (mcSelectedViews.includes('bimonthly')) {
         const startMonth = sm % 2 === 1 ? sm : sm - 1;
         if (m === startMonth || m === startMonth + 1) {
-          const g = getGroup(empId, 'bimonthly', sm);
+          const g = getGroup(empId, 'bimonthly', sm, r);
           if (g) g.target += val;
         }
       }
       if (mcSelectedViews.includes('ytd') && m <= sm) {
-        const g = getGroup(empId, 'ytd', sm);
+        const g = getGroup(empId, 'ytd', sm, r);
         if (g) g.target += val;
       }
       if (mcSelectedViews.includes('mtd') && m === sm) {
-        const g = getGroup(empId, 'mtd', sm);
+        const g = getGroup(empId, 'mtd', sm, r);
         if (g) g.target += (sm === mtdCurrentMonth) ? (val * mtdRatio) : val;
       }
     });
@@ -3736,19 +3788,19 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     mcSelectedMonths.forEach(sm => {
       const startMonth = sm % 2 === 1 ? sm : sm - 1;
       if (mcSelectedViews.includes('monthly') && m === sm) {
-        const g = getGroup(empId, 'monthly', sm);
+        const g = getGroup(empId, 'monthly', sm, r);
         if (g) g.ach += val;
       }
       if (mcSelectedViews.includes('bimonthly') && (m === startMonth || m === startMonth + 1)) {
-        const g = getGroup(empId, 'bimonthly', sm);
+        const g = getGroup(empId, 'bimonthly', sm, r);
         if (g) g.ach += val;
       }
       if (mcSelectedViews.includes('ytd') && m <= sm) {
-        const g = getGroup(empId, 'ytd', sm);
+        const g = getGroup(empId, 'ytd', sm, r);
         if (g) g.ach += val;
       }
       if (mcSelectedViews.includes('mtd') && m === sm && (!r.bill_date || r.bill_date <= todayStr)) {
-        const g = getGroup(empId, 'mtd', sm);
+        const g = getGroup(empId, 'mtd', sm, r);
         if (g) g.ach += val;
       }
     });
@@ -3762,19 +3814,19 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     mcSelectedMonths.forEach(sm => {
       const startMonth = sm % 2 === 1 ? sm : sm - 1;
       if (mcSelectedViews.includes('monthly') && m === sm) {
-        const g = getGroup(empId, 'monthly', sm);
+        const g = getGroup(empId, 'monthly', sm, r);
         if (g) g.lastYear += val;
       }
       if (mcSelectedViews.includes('bimonthly') && (m === startMonth || m === startMonth + 1)) {
-        const g = getGroup(empId, 'bimonthly', sm);
+        const g = getGroup(empId, 'bimonthly', sm, r);
         if (g) g.lastYear += val;
       }
       if (mcSelectedViews.includes('ytd') && m <= sm) {
-        const g = getGroup(empId, 'ytd', sm);
+        const g = getGroup(empId, 'ytd', sm, r);
         if (g) g.lastYear += val;
       }
       if (mcSelectedViews.includes('mtd') && m === sm && (!r.bill_date || r.bill_date <= lastYearTodayStr)) {
-        const g = getGroup(empId, 'mtd', sm);
+        const g = getGroup(empId, 'mtd', sm, r);
         if (g) g.lastYear += val;
       }
     });
