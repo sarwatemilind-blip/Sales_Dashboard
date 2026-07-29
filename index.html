@@ -1713,6 +1713,10 @@ async function loadDashboardData(){
         "BE Employee ID": t.emp.emp_id,
         "BE Name": t.emp.name || "—",
         "HQ": displayHqName(t.emp.emp_id, t.emp.hq_name),
+        "State": t.emp.state || "-",
+        "ASM": t.emp.asm_name || "-",
+        "RSM": t.emp.rsm_name || "-",
+        "ZSM": t.emp.zsm_name || "-",
         "Pillar Target": t.pillar.targetVal,
         "Pillar Achievement": t.pillar.achVal,
         "Pillar % Ach": pPct !== null ? pPct.toFixed(1) + "%" : "—",
@@ -3894,6 +3898,9 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     const exportRow = {
       'HQ Name': row.emp.hq_name,
       'State': row.emp.state || '-',
+      'ASM': row.emp.asm_name || '-',
+      'RSM': row.emp.rsm_name || '-',
+      'ZSM': row.emp.zsm_name || '-',
       'Employee Name': row.emp.name || row.emp.emp_id
     };
 
