@@ -2790,30 +2790,37 @@ function downloadDashboardDataExcel() {
   try {
     const wb = XLSX.utils.book_new();
     
-    const ws1 = XLSX.utils.json_to_sheet(lastDashboardData.kpis);
-    XLSX.utils.book_append_sheet(wb, ws1, "KPI Summary");
+    if (currentView === 'multi') {
+      if (lastDashboardData.multiCompareRows && lastDashboardData.multiCompareRows.length > 0) {
+        const wsMulti = XLSX.utils.json_to_sheet(lastDashboardData.multiCompareRows);
+        XLSX.utils.book_append_sheet(wb, wsMulti, "Multi-Compare Data");
+      }
+    } else {
+      const ws1 = XLSX.utils.json_to_sheet(lastDashboardData.kpis);
+      XLSX.utils.book_append_sheet(wb, ws1, "KPI Summary");
 
-    if (lastDashboardData.categories && lastDashboardData.categories.length > 0) {
-      const wsCat = XLSX.utils.json_to_sheet(lastDashboardData.categories);
-      XLSX.utils.book_append_sheet(wb, wsCat, "Category Performance");
-    }
-    
-    const ws2 = XLSX.utils.json_to_sheet(lastDashboardData.brands);
-    XLSX.utils.book_append_sheet(wb, ws2, "Brand Performance");
-    
-    if (lastDashboardData.team && lastDashboardData.team.length > 0) {
-      const ws3 = XLSX.utils.json_to_sheet(lastDashboardData.team);
-      XLSX.utils.book_append_sheet(wb, ws3, "BE Performance");
-    }
-    
-    if (lastDashboardData.beBrandDetail && lastDashboardData.beBrandDetail.length > 0) {
-      const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandDetail);
-      XLSX.utils.book_append_sheet(wb, ws4, "BE x Brand Detail");
-    }
+      if (lastDashboardData.categories && lastDashboardData.categories.length > 0) {
+        const wsCat = XLSX.utils.json_to_sheet(lastDashboardData.categories);
+        XLSX.utils.book_append_sheet(wb, wsCat, "Category Performance");
+      }
+      
+      const ws2 = XLSX.utils.json_to_sheet(lastDashboardData.brands);
+      XLSX.utils.book_append_sheet(wb, ws2, "Brand Performance");
+      
+      if (lastDashboardData.team && lastDashboardData.team.length > 0) {
+        const ws3 = XLSX.utils.json_to_sheet(lastDashboardData.team);
+        XLSX.utils.book_append_sheet(wb, ws3, "BE Performance");
+      }
+      
+      if (lastDashboardData.beBrandDetail && lastDashboardData.beBrandDetail.length > 0) {
+        const ws4 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandDetail);
+        XLSX.utils.book_append_sheet(wb, ws4, "BE x Brand Detail");
+      }
 
-    if (lastDashboardData.beBrandTotals && lastDashboardData.beBrandTotals.length > 0) {
-      const ws5 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandTotals);
-      XLSX.utils.book_append_sheet(wb, ws5, "BE Totals");
+      if (lastDashboardData.beBrandTotals && lastDashboardData.beBrandTotals.length > 0) {
+        const ws5 = XLSX.utils.json_to_sheet(lastDashboardData.beBrandTotals);
+        XLSX.utils.book_append_sheet(wb, ws5, "BE Totals");
+      }
     }
     
     let label = "";
@@ -3804,7 +3811,15 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   teamRows.sort((a,b) => (a.emp.hq_name||'').localeCompare(b.emp.hq_name||''));
 
   let rowsHtml = '';
+  lastDashboardData.multiCompareRows = [];
+
   teamRows.forEach(row => {
+    const exportRow = {
+      'HQ Name': row.emp.hq_name,
+      'State': row.emp.state || '-',
+      'Employee Name': row.emp.name || row.emp.emp_id
+    };
+
     rowsHtml += `<tr>
       <td style="position:sticky; left:0; background:#fff; z-index:10; border-right:1px solid #e2e8f0;"><b>${row.emp.hq_name}</b></td>
       <td style="position:sticky; left:120px; background:#fff; z-index:10; border-right:1px solid #e2e8f0;">${row.emp.state || '-'}</td>
@@ -3819,6 +3834,16 @@ async function loadMultiCompareData(activeScopeIds, pill) {
       }
       
       const pctAch = g.target > 0 ? Math.round((g.ach / g.target) * 100) + '%' : '-';
+      
+      let viewLabel = combo.view.toUpperCase();
+      if (combo.view === 'monthly') viewLabel = 'Monthly';
+      if (combo.view === 'bimonthly') viewLabel = 'Bi-Monthly';
+      const colPrefix = getMonthLabel(combo.month) + ' - ' + viewLabel;
+      
+      exportRow[`${colPrefix} Target`] = g.target > 0 ? Number((g.target / 100000).toFixed(2)) : 0;
+      exportRow[`${colPrefix} Ach`] = g.ach > 0 ? Number((g.ach / 100000).toFixed(2)) : 0;
+      exportRow[`${colPrefix} % Ach`] = pctAch;
+      exportRow[`${colPrefix} Growth`] = growth !== null ? growth.toFixed(1) + '%' : '-';
 
       rowsHtml += `
         <td style="text-align:right; border-left:2px solid #cbd5e1;">${formatLakhs(g.target)}</td>
@@ -3828,6 +3853,7 @@ async function loadMultiCompareData(activeScopeIds, pill) {
       `;
     });
     rowsHtml += `</tr>`;
+    lastDashboardData.multiCompareRows.push(exportRow);
   });
 
   if (teamRows.length === 0) {
