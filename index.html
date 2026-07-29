@@ -1574,7 +1574,7 @@ async function loadDashboardData(){
   let teamHtml = "";
   lastDashboardData.team = [];
   if (session.designation !== 'BE' && activeScopeIds.length > 1) {
-    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
+    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds);
     const teamMap = {};
     (team||[]).forEach(e => teamMap[e.emp_id] = {
       emp: e,
@@ -1604,8 +1604,19 @@ async function loadDashboardData(){
 
     filteredAchAttr.forEach(r => {
       let empId = r.be_emp_id;
-      let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
-      if (!empInfo || empInfo.designation !== 'BE') {
+      let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+      if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
+          let hq = r.hq_name || 'Unknown';
+          if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+          if (!teamMap[empId]) {
+            teamMap[empId] = {
+              emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: '-', region: '-', asm_name: '-', rsm_name: '-', zsm_name: '-' },
+              pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+              others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+              total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+            };
+          }
+      } else if (!teamMap[empId]) {
         let hq = r.hq_name || 'Unknown';
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
@@ -1641,8 +1652,19 @@ async function loadDashboardData(){
 
     filteredLastYearAttr.forEach(r => {
       let empId = r.be_emp_id;
-      let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
-      if (!empInfo || empInfo.designation !== 'BE') {
+      let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
+      if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
+          let hq = r.hq_name || 'Unknown';
+          if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+          if (!teamMap[empId]) {
+            teamMap[empId] = {
+              emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: '-', region: '-', asm_name: '-', rsm_name: '-', zsm_name: '-' },
+              pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+              others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+              total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+            };
+          }
+      } else if (!teamMap[empId]) {
         let hq = r.hq_name || 'Unknown';
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
@@ -3748,7 +3770,13 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const getGroup = (emp_id, view, month, r) => {
     let empId = emp_id;
     let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
-    if (!empInfo || empInfo.designation !== 'BE') {
+    if (!teamMap[empId] && empId && empId.trim() !== '' && empId.toUpperCase() !== 'UNKNOWN' && !empId.startsWith('VACANT_')) {
+      let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
+      if (!teamMap[empId]) {
+        teamMap[empId] = { emp: empInfo || { emp_id: empId, name: empId, designation: 'BE', hq_name: hq, region: '-' }, data: {} };
+      }
+    } else if (!teamMap[empId]) {
       let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
       if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
       empId = 'VACANT_' + hq;
