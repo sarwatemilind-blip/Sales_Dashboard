@@ -180,6 +180,22 @@ const fmtCurrency = (n) => `₹${fmtNum(n)}`;
 const fmtPct = (n) => isFinite(n) ? n.toFixed(0) + "%" : "—";
 const monthLabel = (n) => (FY_MONTHS.find(m=>m.n===n)||{}).label || n;
 const normalizeEmpId = (value) => (value || "").toString().trim().toUpperCase();
+
+const getHierarchyNames = (emp_id, fallbackState) => {
+  let asm = '-', rsm = '-', zsm = '-';
+  let state = fallbackState || '-';
+  let current = allDownlineEmployees.find(e => e.emp_id === emp_id);
+  while (current) {
+    if (state === '-' && current.state) state = current.state;
+    const role = current.designation;
+    if (role === 'ASM') asm = current.name || current.emp_id;
+    else if (role === 'RSM' || role === 'DYRSM') rsm = current.name || current.emp_id;
+    else if (role === 'ZSM' || role === 'ZM') zsm = current.name || current.emp_id;
+    if (!current.manager_emp_id) break;
+    current = allDownlineEmployees.find(e => e.emp_id === current.manager_emp_id);
+  }
+  return { asm, rsm, zsm, state };
+};
 const displayHqName = (empId, hqName) => normalizeEmpId(empId) === 'ADLA02' ? 'Mumbai' : (hqName || "—");
 const scopeLabel = (emp) => {
   const hq = `${displayHqName(emp.emp_id, emp.hq_name)}${emp.hq_code ? ` [${emp.hq_code}]` : ''}`;
