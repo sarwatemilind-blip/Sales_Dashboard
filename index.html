@@ -3807,7 +3807,9 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     });
   });
 
-  const teamRows = Object.values(teamMap).filter(t => t.emp.designation === 'BE');
+  const teamRows = Object.values(teamMap).filter(t => 
+    Object.values(t.data).some(g => g.target > 0 || g.ach > 0 || g.lastYear > 0)
+  );
   teamRows.sort((a,b) => (a.emp.hq_name||'').localeCompare(b.emp.hq_name||''));
 
   let rowsHtml = '';
