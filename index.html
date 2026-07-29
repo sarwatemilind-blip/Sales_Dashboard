@@ -1606,15 +1606,17 @@ async function loadDashboardData(){
       let empId = r.be_emp_id;
       let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
       if (!empInfo || empInfo.designation !== 'BE') {
-        const hq = r.hq_name || 'Unknown';
+        let hq = r.hq_name || 'Unknown';
+        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
         if (!teamMap[empId]) {
-          let state = '-';
           let region = '';
           const peer = allDownlineEmployees.find(e => e.hq_name === hq);
-          if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+          if (peer) { region = peer.region || ''; }
+          const fallbackState = peer ? (peer.state || '-') : '-';
+          const hNames = getHierarchyNames(r.be_emp_id, fallbackState);
           teamMap[empId] = {
-            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: state, region: region },
+            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
             pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
@@ -1641,15 +1643,17 @@ async function loadDashboardData(){
       let empId = r.be_emp_id;
       let empInfo = allDownlineEmployees.find(e => e.emp_id === empId);
       if (!empInfo || empInfo.designation !== 'BE') {
-        const hq = r.hq_name || 'Unknown';
+        let hq = r.hq_name || 'Unknown';
+        if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
         empId = 'VACANT_' + hq;
         if (!teamMap[empId]) {
-          let state = '-';
           let region = '';
           const peer = allDownlineEmployees.find(e => e.hq_name === hq);
-          if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+          if (peer) { region = peer.region || ''; }
+          const fallbackState = peer ? (peer.state || '-') : '-';
+          const hNames = getHierarchyNames(r.be_emp_id, fallbackState);
           teamMap[empId] = {
-            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: state, region: region },
+            emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: r.hq_code, state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
             pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
             total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
@@ -3732,7 +3736,8 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const teamMap = {};
   allDownlineEmployees.forEach(e => {
     if (activeScopeIds.includes(e.emp_id)) {
-      teamMap[e.emp_id] = { emp: e, data: {} };
+      const hNames = getHierarchyNames(e.emp_id, e.state);
+      teamMap[e.emp_id] = { emp: { ...e, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm, state: hNames.state }, data: {} };
     }
   });
 
@@ -3740,15 +3745,17 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     let empId = emp_id;
     let empInfo = teamMap[empId] ? teamMap[empId].emp : allDownlineEmployees.find(e => e.emp_id === empId);
     if (!empInfo || empInfo.designation !== 'BE') {
-      const hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      let hq = (r && r.hq_name) ? r.hq_name : 'Unknown';
+      if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
       empId = 'VACANT_' + hq;
       if (!teamMap[empId]) {
-        let state = '-';
         let region = '';
         const peer = allDownlineEmployees.find(e => e.hq_name === hq);
-        if (peer) { state = peer.state || '-'; region = peer.region || ''; }
+        if (peer) { region = peer.region || ''; }
+        const fallbackState = peer ? (peer.state || '-') : '-';
+        const hNames = getHierarchyNames(emp_id, fallbackState);
         teamMap[empId] = {
-          emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: (r && r.hq_code) ? r.hq_code : '', state: state, region: region },
+          emp: { emp_id: empId, name: 'Vacant', designation: 'BE', hq_name: hq, hq_code: (r && r.hq_code) ? r.hq_code : '', state: hNames.state, region: region, asm_name: hNames.asm, rsm_name: hNames.rsm, zsm_name: hNames.zsm },
           data: {}
         };
       }
