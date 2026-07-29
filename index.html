@@ -3894,8 +3894,8 @@ async function loadMultiCompareData(activeScopeIds, pill) {
       if (combo.view === 'bimonthly') viewLabel = 'Bi-Monthly';
       const colPrefix = getMonthLabel(combo.month) + ' - ' + viewLabel;
       
-      exportRow[`${colPrefix} Target`] = g.target > 0 ? Number((g.target / 100000).toFixed(2)) : 0;
-      exportRow[`${colPrefix} Ach`] = g.ach > 0 ? Number((g.ach / 100000).toFixed(2)) : 0;
+      exportRow[`${colPrefix} Target`] = g.target ? Number((g.target / 100000).toFixed(2)) : 0;
+      exportRow[`${colPrefix} Ach`] = g.ach ? Number((g.ach / 100000).toFixed(2)) : 0;
       exportRow[`${colPrefix} % Ach`] = pctAch;
       exportRow[`${colPrefix} Growth`] = growth !== null ? growth.toFixed(1) + '%' : '-';
 
