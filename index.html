@@ -1453,6 +1453,11 @@ async function loadDashboardData(){
   const ach = isCompanyOverall ? achRaw : achAttr;
   const lastYear = isCompanyOverall ? lastYearRaw : lastYearAttr;
 
+  const normalizeHqName = (hq) => {
+    if (!hq) return 'Unknown';
+    return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
+  };
+
   let stockistHqMap = new Map();
   try {
      let from = 0;
@@ -1585,10 +1590,6 @@ async function loadDashboardData(){
     const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
     const teamMap = {};
     // Normalise HQ name: strip " (Vacant BE)" so targets & achievement merge under the same key
-    const normalizeHqName = (hq) => {
-      if (!hq) return 'Unknown';
-      return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
-    };
     (team||[]).forEach(e => teamMap[e.emp_id] = {
       emp: e,
       pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
