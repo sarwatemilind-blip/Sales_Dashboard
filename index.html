@@ -2557,6 +2557,21 @@ async function loadStockStatementData(){
 
   let stockistCatalog = visibleStockistList;
 
+  // Dynamically append any unmapped products found in sales so they are not dropped from the Stock Statement!
+  const knownProducts = new Set(productCatalog.map(p => normalizeEmpId(p.product_code)));
+  const unmappedProductsMap = new Map();
+  salesMap.forEach(s => {
+    const pCode = normalizeEmpId(s.product_code);
+    if (!knownProducts.has(pCode)) {
+      unmappedProductsMap.set(pCode, {
+        product_code: s.product_code,
+        product_name: s.product_name || s.product_code || 'UNKNOWN',
+        brand: s.brand || '-'
+      });
+    }
+  });
+  productCatalog.push(...Array.from(unmappedProductsMap.values()));
+
   // Dynamically append any unmapped stockists found in sales so they are not dropped from the Stock Statement!
   if (selectedEmpId === 'overall') {
     const knownCodes = new Set(stockistCatalog.map(s => normalizeEmpId(s.stockist_code)));
