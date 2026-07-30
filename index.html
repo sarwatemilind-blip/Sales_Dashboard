@@ -2356,7 +2356,8 @@ async function loadStockStatementData(){
 
   let currentSales = [];
   try {
-    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
+    const isOverall = selectedEmpId === 'overall';
+    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => isOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
