@@ -1421,21 +1421,37 @@ async function loadDashboardData(){
 
   async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal, applyScopeFilter = false) {
     let allRows = [];
-    let from = 0;
     const orderCol = tableName === 'targets' || tableName === 'sales' ? 'id' : 'sale_id';
-    while (true) {
-      let query = sb.from(tableName).select('*').eq(yearCol, yVal).in(monthCol, monthsVal);
-      if (applyScopeFilter) {
-        query = query.in(filterCol, activeScopeIds);
+    
+    const queries = [];
+    if (tableName === 'targets') {
+      // Targets table uses calendar year (e.g. 2026 for Apr-Dec, 2027 for Jan-Mar)
+      const mCurrent = monthsVal.filter(m => m <= 9);
+      const mNext = monthsVal.filter(m => m >= 10);
+      if (mCurrent.length > 0) queries.push({ y: yVal, m: mCurrent });
+      if (mNext.length > 0) queries.push({ y: yVal + 1, m: mNext });
+    } else {
+      // Sales tables use fiscal year (period_year = 2026 for all 12 months)
+      queries.push({ y: yVal, m: monthsVal });
+    }
+
+    for (const q of queries) {
+      if (q.m.length === 0) continue;
+      let from = 0;
+      while (true) {
+        let query = sb.from(tableName).select('*').eq(yearCol, q.y).in(monthCol, q.m);
+        if (applyScopeFilter) {
+          query = query.in(filterCol, activeScopeIds);
+        }
+        const { data, error } = await query.order(orderCol, { ascending: true }).range(from, from + 999);
+        if (error) {
+          console.error("Error loading " + tableName, error);
+          break;
+        }
+        allRows = allRows.concat(data);
+        if (data.length < 1000) break;
+        from += 1000;
       }
-      const { data, error } = await query.order(orderCol, { ascending: true }).range(from, from + 999);
-      if (error) {
-        console.error("Error loading " + tableName, error);
-        break;
-      }
-      allRows = allRows.concat(data);
-      if (data.length < 1000) break;
-      from += 1000;
     }
     return allRows;
   }
