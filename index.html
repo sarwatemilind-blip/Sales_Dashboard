@@ -2172,6 +2172,25 @@ async function renderStockStatement(){
     currentYear = parseInt(yearSel.value);
     loadStockStatementData();
   };
+
+  let autoSaveTimeout = null;
+  window.triggerAutoSave = function() {
+    if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+    const saveBtn = document.getElementById("stockSaveAllBtn");
+    if (saveBtn) {
+      saveBtn.innerHTML = 'Saving...';
+    }
+    autoSaveTimeout = setTimeout(async () => {
+      await saveAllStockStatementEntries({ silent: true });
+      if (saveBtn) {
+        saveBtn.innerHTML = '&#10003; Saved';
+        setTimeout(() => { 
+          saveBtn.innerHTML = 'Save All Entries'; 
+        }, 2000);
+      }
+    }, 1000); // 1 second debounce
+  };
+
   document.getElementById("stockRefreshBtn").onclick = () => loadStockStatementData();
   document.getElementById("stockSaveAllBtn").onclick = async () => {
     const saved = await saveAllStockStatementEntries();
@@ -2356,8 +2375,8 @@ async function loadStockStatementData(){
 
   let currentSales = [];
   try {
-    const isOverall = selectedEmpId === 'overall';
-    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => isOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
+    const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
+    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
@@ -2868,10 +2887,10 @@ async function loadStockStatementData(){
       }
 
       if (openingInput && row.openingEditable) {
-        openingInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); });
+        openingInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); window.triggerAutoSave(); });
       }
       if (secondaryInput && row.secondaryEditable) {
-        secondaryInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); });
+        secondaryInput.addEventListener('input', () => { isStockStatementDirty = true; updateRowCalc(); window.triggerAutoSave(); });
       }
     });
   });
