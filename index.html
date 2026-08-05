@@ -514,9 +514,8 @@ async function saveAllStockStatementEntries({ silent = false } = {}) {
   const scopeKey = lastStockStatementData.scopeEmpId || selectedEmpId || 'overall';
   const targetYear = lastStockStatementData.year || currentYear;
   const targetMonth = lastStockStatementData.month || currentMonth;
-  const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
-  const canEditSecondary = isFirstMonth || stockSecondaryEditOpen;
+  const canEditOpening = stockOpeningEditOpen;
+  const canEditSecondary = stockSecondaryEditOpen;
   const isManager = session.designation !== 'BE';
   const now = new Date().toISOString();
   const payloads = [];
@@ -2629,8 +2628,8 @@ async function loadStockStatementData(){
     stockistCatalog = stockistCatalog.filter(row => normalizeEmpId(row.stockist_code) === normalizeEmpId(selectedStockistCode));
   }
   const isFirstMonth = targetYear === STOCK_FIRST_YEAR && targetMonth === STOCK_FIRST_MONTH;
-  // Opening editable ONLY if first month OR admin opened Opening edit
-  const canEditOpening = isFirstMonth || stockOpeningEditOpen;
+  // Opening editable ONLY if admin opened Opening edit
+  const canEditOpening = stockOpeningEditOpen;
   // Secondary editable ONLY if admin opened Secondary edit
   const canEditSecondary = stockSecondaryEditOpen;
   const groups = stockistCatalog.map(stockistRow => {
