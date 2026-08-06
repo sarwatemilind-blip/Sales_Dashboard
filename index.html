@@ -2658,13 +2658,22 @@ async function loadStockStatementData(){
           ? (parseFloat(saved.opening_units) || 0)
           : 0;
       } else {
-        // Non-first months: prefer prev month's actual closing (live, never stale)
+        // Non-first months calculate carry-forward from previous month
+        let carryForward = 0;
         if (prevSaved && prevSaved.closing_units != null) {
-          openingUnits = Math.max(0, parseFloat(prevSaved.closing_units) || 0);
+          carryForward = Math.max(0, parseFloat(prevSaved.closing_units) || 0);
         } else if (prevAnySaved && prevAnySaved.closing_units != null) {
-          openingUnits = Math.max(0, parseFloat(prevAnySaved.closing_units) || 0);
+          carryForward = Math.max(0, parseFloat(prevAnySaved.closing_units) || 0);
+        }
+        
+        if (canEditOpening && saved && saved.opening_units != null) {
+          // Admin unlocked Opening Edit for this month: explicitly prioritize the saved manual entry
+          openingUnits = parseFloat(saved.opening_units) || 0;
+        } else if (prevSaved || prevAnySaved) {
+          // Locked, or unlocked but nothing saved yet: strictly enforce carry-forward
+          openingUnits = carryForward;
         } else if (saved && saved.opening_units != null) {
-          // Fallback: use whatever was explicitly saved (e.g. manual admin override)
+          // Fallback: no previous month data exists at all
           openingUnits = parseFloat(saved.opening_units) || 0;
         } else {
           openingUnits = 0;
