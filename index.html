@@ -4974,13 +4974,25 @@ function renderHygieneSlabs(achvPct, sales) {
   noInc.style.display = (activeIdx < 0) ? 'block' : 'none';
 }
 
-function calcSection(prefix, slabKey) {
+function calcSection(prefix, slabKey, criteria) {
   const target = parseFloat(document.getElementById(prefix+'-target').value) || 0;
   const actual = parseFloat(document.getElementById(prefix+'-actual').value) || 0;
   const ly = parseFloat(document.getElementById(prefix+'-ly').value) || 0;
   const achvPct = target > 0 ? actual / target : 0;
   const growth = ly > 0 ? (actual / ly - 1) : null;
   const blocked = ly > 0 && growth <= 0;
+
+  let qualMsg = '';
+  let isQualifying = true;
+  if (criteria && !blocked) {
+    if (criteria.bimonthlyAchvPct < 0.90) {
+      isQualifying = false;
+      qualMsg = 'Blocked - Bimonthly < 90%';
+    } else if (criteria.nextMonthAchvPct < 0.90) {
+      isQualifying = false;
+      qualMsg = 'Blocked - Next Month < 90%';
+    }
+  }
 
   // Achievement display
   const achvEl = document.getElementById(prefix+'-achv-disp');
@@ -5010,13 +5022,21 @@ function calcSection(prefix, slabKey) {
   // Calculate incentive
   const slabs = SLABS[slabKey];
   let earned = 0;
-  if (!blocked) {
+  if (!blocked && isQualifying) {
     earned = calcIncentive(achvPct, actual, target, slabs);
   }
 
   // Render slabs
   const slabPrefix = {monthly:'m',bimonthly:'b',annual:'a',pillar:'p',boty:'by'}[slabKey];
-  renderSlabs(slabPrefix+'-slabs', slabs, achvPct, actual, target, blocked, slabPrefix+'-no-inc');
+  renderSlabs(slabPrefix+'-slabs', slabs, achvPct, actual, target, blocked || !isQualifying, slabPrefix+'-no-inc');
+
+  if (!isQualifying) {
+    const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
+    if (noIncMsg) {
+       noIncMsg.style.display = 'block';
+       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> - ${qualMsg}</span>`;
+    }
+  }
 
   // Total display
   document.getElementById(slabPrefix+'-total-disp').textContent = fmt(earned);
@@ -5051,8 +5071,21 @@ function calcAll() {
   const m = calcSection('m', 'monthly');
   const b = calcSection('b', 'bimonthly');
   const a = calcSection('a', 'annual');
-  const p = calcSection('p', 'pillar');
-  const by = calcSection('by', 'boty');
+
+  const bTarget = parseFloat(document.getElementById('b-target').value) || 0;
+  const bActual = parseFloat(document.getElementById('b-actual').value) || 0;
+  const bAchvPct = bTarget > 0 ? bActual / bTarget : 0;
+
+  const pNextTarget = window.buckets ? window.buckets.pillarNext.t : 0;
+  const pNextActual = window.buckets ? window.buckets.pillarNext.a : 0;
+  const pNextAchvPct = pNextTarget > 0 ? pNextActual / pNextTarget : 0;
+
+  const byNextTarget = window.buckets ? window.buckets.botyNext.t : 0;
+  const byNextActual = window.buckets ? window.buckets.botyNext.a : 0;
+  const byNextAchvPct = byNextTarget > 0 ? byNextActual / byNextTarget : 0;
+
+  const p = calcSection('p', 'pillar', { bimonthlyAchvPct: bAchvPct, nextMonthAchvPct: pNextAchvPct });
+  const by = calcSection('by', 'boty', { bimonthlyAchvPct: bAchvPct, nextMonthAchvPct: byNextAchvPct });
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
@@ -5251,13 +5284,16 @@ async function renderIncentive() {
   })();
 
   // 4. Aggregators
-  const buckets = {
+  window.buckets = {
     monthly: { t: 0, a: 0, ly: 0 },
     bimonthly: { t: 0, a: 0, ly: 0 },
     annual: { t: 0, a: 0, ly: 0 },
     pillar: { t: 0, a: 0, ly: 0 },
-    boty: { t: 0, a: 0, ly: 0 }
+    boty: { t: 0, a: 0, ly: 0 },
+    pillarNext: { t: 0, a: 0 },
+    botyNext: { t: 0, a: 0 }
   };
+  const nextMonth = (biCycle[1] % 12) + 1;
 
   const isBOTY = (brand) => {
     if (!brand) return false;
@@ -5280,6 +5316,9 @@ async function renderIncentive() {
       buckets.bimonthly.t += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.t += val;
       if (isBOTY(r.brand)) buckets.boty.t += val;
+    } else if (m === nextMonth) {
+      if (isPillarIncentiveBrand(r.brand)) buckets.pillarNext.t += val;
+      if (isBOTY(r.brand)) buckets.botyNext.t += val;
     }
   });
 
@@ -5292,6 +5331,9 @@ async function renderIncentive() {
       buckets.bimonthly.a += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.a += val;
       if (isBOTY(r.brand)) buckets.boty.a += val;
+    } else if (m === nextMonth) {
+      if (isPillarIncentiveBrand(r.brand)) buckets.pillarNext.a += val;
+      if (isBOTY(r.brand)) buckets.botyNext.a += val;
     }
   });
 
@@ -5312,6 +5354,9 @@ async function renderIncentive() {
     const el = document.getElementById(id);
     if (el) { el.value = Math.round(val); el.readOnly = true; el.style.backgroundColor = '#f4f6fb'; }
   };
+  
+  // Assign window.buckets reference to local
+  const buckets = window.buckets;
 
   setVal('m-target', buckets.monthly.t);
   setVal('m-actual', buckets.monthly.a);
