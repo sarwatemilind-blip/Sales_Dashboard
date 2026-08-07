@@ -5284,7 +5284,7 @@ async function renderIncentive() {
   })();
 
   // 4. Aggregators
-  window.buckets = {
+  const buckets = window.buckets = {
     monthly: { t: 0, a: 0, ly: 0 },
     bimonthly: { t: 0, a: 0, ly: 0 },
     annual: { t: 0, a: 0, ly: 0 },
@@ -5355,8 +5355,7 @@ async function renderIncentive() {
     if (el) { el.value = Math.round(val); el.readOnly = true; el.style.backgroundColor = '#f4f6fb'; }
   };
   
-  // Assign window.buckets reference to local
-  const buckets = window.buckets;
+  // Removed duplicate const buckets
 
   setVal('m-target', buckets.monthly.t);
   setVal('m-actual', buckets.monthly.a);
