@@ -5478,29 +5478,29 @@ window.exportIncentives = async function() {
       
       const m_tgt = document.getElementById('m-target').value;
       const m_act = document.getElementById('m-actual').value;
-      const m_earned = document.getElementById('m-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const m_earned = document.getElementById('m-total-disp').innerText.replace(/[^\d.-]/g, '');
       
       const b_tgt = document.getElementById('b-target').value;
       const b_act = document.getElementById('b-actual').value;
-      const b_earned = document.getElementById('b-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const b_earned = document.getElementById('b-total-disp').innerText.replace(/[^\d.-]/g, '');
 
       const a_tgt = document.getElementById('a-target').value;
       const a_act = document.getElementById('a-actual').value;
-      const a_earned = document.getElementById('a-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const a_earned = document.getElementById('a-total-disp').innerText.replace(/[^\d.-]/g, '');
 
       const p_tgt = document.getElementById('p-target').value;
       const p_act = document.getElementById('p-actual').value;
-      const p_earned = document.getElementById('p-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const p_earned = document.getElementById('p-total-disp').innerText.replace(/[^\d.-]/g, '');
 
-      const boty_tgt = document.getElementById('boty-target').value;
-      const boty_act = document.getElementById('boty-actual').value;
-      const boty_earned = document.getElementById('boty-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const boty_tgt = document.getElementById('by-target').value;
+      const boty_act = document.getElementById('by-actual').value;
+      const boty_earned = document.getElementById('by-total-disp').innerText.replace(/[^\d.-]/g, '');
 
       const h_sales = document.getElementById('h-sales').value;
       const h_expiry = document.getElementById('h-expiry').value;
-      const h_earned = document.getElementById('h-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      const h_earned = document.getElementById('h-total-disp').innerText.replace(/[^\d.-]/g, '');
 
-      const total_earned = document.getElementById('inc-total-value').innerText.replace(/[^\d.-]/g, '');
+      const total_earned = document.getElementById('grand-total-disp').innerText.replace(/[^\d.-]/g, '');
 
       rows.push({
         "BE ID": be.emp_id,
