@@ -5070,7 +5070,10 @@ function calcHygiene() {
   let isQualifying = true;
   let qualMsg = '';
   
-  if (sales === 0) {
+  if (currentMonth % 4 !== 0) {
+    isQualifying = false;
+    qualMsg = '4-month cycle not completed';
+  } else if (sales === 0) {
     isQualifying = false;
     qualMsg = 'Actual sales data not captured';
   } else {
