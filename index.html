@@ -5159,8 +5159,20 @@ async function renderIncentive() {
     return;
   }
   const beEmpId = selectedEmpId || session.emp_id;
+  const beEmp = typeof allDownlineEmployees !== 'undefined' ? allDownlineEmployees.find(e => e.emp_id === beEmpId) : null;
+  const beName = beEmp ? (beEmp.name || beEmp.emp_id) : (session.name || session.emp_id);
+  const incBeNameDisplay = document.getElementById('inc-be-name-display');
+  if (incBeNameDisplay) {
+    incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/><span style="color:#FFF;">BE: ${beName}</span>`;
+  }
 
-  // Wait for Supabase to be ready if needed, though renderShell implies it is.
+  const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const currentMonthName = monthNames[currentMonth];
+  const incMonthDisplay = document.getElementById('inc-month-display');
+  if (incMonthDisplay) {
+    incMonthDisplay.textContent = `Month: ${currentMonthName} ${currentYear}`;
+  }
+
   // 2. Determine cycles
   const ytdMonths = [];
   const order = [4,5,6,7,8,9,10,11,12,1,2,3];
