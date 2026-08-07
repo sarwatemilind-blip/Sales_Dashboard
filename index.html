@@ -5125,10 +5125,37 @@ async function renderIncentive() {
   main.innerHTML = incentiveHTML;
 
   // 1. Must be viewing a specific BE
-  if (selectedEmpId === 'overall' || (!selectedEmpId && session.designation !== 'BE')) {
-    main.innerHTML = `<div style="padding: 20px; color: var(--muted); text-align: center;">
-      Please select a single BE from the Scope dropdown to view their Incentive Calculation.
+  let isBE = false;
+  if (selectedEmpId && selectedEmpId !== 'overall') {
+    const emp = typeof allDownlineEmployees !== 'undefined' ? allDownlineEmployees.find(e => e.emp_id === selectedEmpId) : null;
+    if (emp && emp.designation === 'BE') isBE = true;
+    else if (!emp && session.designation === 'BE') isBE = true; 
+  } else if (session.designation === 'BE') {
+    isBE = true;
+  }
+
+  if (!isBE) {
+    main.innerHTML = `<div style="padding: 40px 20px; color: var(--muted); text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <div style="margin-bottom: 20px; font-size: 16px;">
+        Please select a single <b>BE</b> from the dropdown below to view their Incentive Calculation.<br/>
+        <span style="font-size: 13px; opacity: 0.8;">Incentive calculation is only available for Business Executives.</span>
+      </div>
+      <select id="incScopeSel" style="max-width: 360px; padding: 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; outline: none; cursor: pointer;">
+        ${typeof buildScopeOptionsHTML === 'function' ? buildScopeOptionsHTML(selectedEmpId) : '<option value="overall">Overall Scope</option>'}
+      </select>
     </div>`;
+    
+    setTimeout(() => {
+      const incScopeSel = document.getElementById("incScopeSel");
+      if (incScopeSel) {
+        incScopeSel.onchange = () => {
+          selectedEmpId = incScopeSel.value;
+          const mainScopeSel = document.getElementById("scopeSel");
+          if (mainScopeSel) mainScopeSel.value = selectedEmpId;
+          renderIncentive();
+        };
+      }
+    }, 0);
     return;
   }
   const beEmpId = selectedEmpId || session.emp_id;
