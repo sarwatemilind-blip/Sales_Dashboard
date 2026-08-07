@@ -5166,11 +5166,22 @@ async function renderIncentive() {
     incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/><span style="color:#FFF;">BE: ${beName}</span>`;
   }
 
-  const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const currentMonthName = monthNames[currentMonth];
   const incMonthDisplay = document.getElementById('inc-month-display');
   if (incMonthDisplay) {
-    incMonthDisplay.textContent = `Month: ${currentMonthName} ${currentYear}`;
+    const opts = FY_MONTHS.map(m => `<option value="${m.n}" ${m.n===currentMonth?'selected':''}>${m.label}</option>`).join('');
+    incMonthDisplay.innerHTML = `<select id="incMonthSel" style="background: transparent; color: var(--gold-light); border: 1px solid var(--gold-light); border-radius: 4px; padding: 2px 4px; font-size: 11px; outline: none; cursor: pointer;">${opts}</select>`;
+    
+    setTimeout(() => {
+      const ms = document.getElementById('incMonthSel');
+      if (ms) {
+        ms.onchange = (e) => {
+          currentMonth = parseInt(e.target.value, 10);
+          const mainSel = document.getElementById('monthSel');
+          if (mainSel) mainSel.value = currentMonth;
+          renderIncentive();
+        };
+      }
+    }, 0);
   }
 
   // 2. Determine cycles
@@ -5252,7 +5263,7 @@ async function renderIncentive() {
   };
 
   tgt.forEach(r => {
-    const m = r.month_num;
+    const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
     buckets.annual.t += val;
     if (m === currentMonth) buckets.monthly.t += val;
@@ -5264,7 +5275,7 @@ async function renderIncentive() {
   });
 
   ach.forEach(r => {
-    const m = r.period_month;
+    const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.a += val;
     if (m === currentMonth) buckets.monthly.a += val;
@@ -5276,7 +5287,7 @@ async function renderIncentive() {
   });
 
   lastYear.forEach(r => {
-    const m = r.period_month;
+    const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.ly += val;
     if (m === currentMonth) buckets.monthly.ly += val;
