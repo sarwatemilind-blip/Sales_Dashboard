@@ -7,7 +7,102 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>Adonis Field Force — Sales Dashboard</title>
-<script src="supabase.js"></script>
+<script src="supabase.js">window.exportIncentives = async function() {
+  const exportBtn = document.getElementById('incExportBtn');
+  exportBtn.innerText = 'Generating...';
+  exportBtn.disabled = true;
+
+  try {
+    const originalEmpId = selectedEmpId;
+    // Get all BEs in the downline
+    const bes = allDownlineEmployees.filter(e => e.designation === 'BE');
+    if (bes.length === 0) {
+      alert('No BEs found in your scope to export.');
+      exportBtn.innerHTML = '&#11123; Download';
+      exportBtn.disabled = false;
+      return;
+    }
+
+    const rows = [];
+    
+    for (let be of bes) {
+      selectedEmpId = be.emp_id;
+      // Wait for UI to render and calculate
+      await renderIncentive();
+      
+      const m_tgt = document.getElementById('m-target').value;
+      const m_act = document.getElementById('m-actual').value;
+      const m_earned = document.getElementById('m-earned-disp').innerText.replace(/[^\d.-]/g, '');
+      
+      const b_tgt = document.getElementById('b-target').value;
+      const b_act = document.getElementById('b-actual').value;
+      const b_earned = document.getElementById('b-earned-disp').innerText.replace(/[^\d.-]/g, '');
+
+      const a_tgt = document.getElementById('a-target').value;
+      const a_act = document.getElementById('a-actual').value;
+      const a_earned = document.getElementById('a-earned-disp').innerText.replace(/[^\d.-]/g, '');
+
+      const p_tgt = document.getElementById('p-target').value;
+      const p_act = document.getElementById('p-actual').value;
+      const p_earned = document.getElementById('p-earned-disp').innerText.replace(/[^\d.-]/g, '');
+
+      const boty_tgt = document.getElementById('boty-target').value;
+      const boty_act = document.getElementById('boty-actual').value;
+      const boty_earned = document.getElementById('boty-earned-disp').innerText.replace(/[^\d.-]/g, '');
+
+      const h_sales = document.getElementById('h-sales').value;
+      const h_expiry = document.getElementById('h-expiry').value;
+      const h_earned = document.getElementById('h-earned-disp').innerText.replace(/[^\d.-]/g, '');
+
+      const total_earned = document.getElementById('inc-total-value').innerText.replace(/[^\d.-]/g, '');
+
+      rows.push({
+        "BE ID": be.emp_id,
+        "BE Name": be.name,
+        "Manager ID": be.manager_emp_id,
+        "Monthly Target": parseFloat(m_tgt) || 0,
+        "Monthly Actual": parseFloat(m_act) || 0,
+        "Monthly Earned": parseFloat(m_earned) || 0,
+        "Bimonthly Target": parseFloat(b_tgt) || 0,
+        "Bimonthly Actual": parseFloat(b_act) || 0,
+        "Bimonthly Earned": parseFloat(b_earned) || 0,
+        "Annual Target": parseFloat(a_tgt) || 0,
+        "Annual Actual": parseFloat(a_act) || 0,
+        "Annual Earned": parseFloat(a_earned) || 0,
+        "Pillar Target": parseFloat(p_tgt) || 0,
+        "Pillar Actual": parseFloat(p_act) || 0,
+        "Pillar Earned": parseFloat(p_earned) || 0,
+        "BOTY Target": parseFloat(boty_tgt) || 0,
+        "BOTY Actual": parseFloat(boty_act) || 0,
+        "BOTY Earned": parseFloat(boty_earned) || 0,
+        "Hygiene Sales": parseFloat(h_sales) || 0,
+        "Hygiene Expiry": parseFloat(h_expiry) || 0,
+        "Hygiene Earned": parseFloat(h_earned) || 0,
+        "Total Earned": parseFloat(total_earned) || 0
+      });
+    }
+    
+    // Restore original selected emp
+    selectedEmpId = originalEmpId;
+    await renderIncentive();
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Incentives");
+    
+    const lbl = typeof monthLabel === 'function' ? monthLabel(currentMonth) : FY_MONTHS.find(m => m.n === currentMonth)?.label;
+    XLSX.writeFile(wb, \`Incentives_Report_\${lbl}_\${currentYear}.xlsx\`);
+    
+  } catch (err) {
+    console.error(err);
+    alert('Export failed: ' + err.message);
+  } finally {
+    exportBtn.innerHTML = '&#11123; Download';
+    exportBtn.disabled = false;
+  }
+};
+
+</script>
 <link rel="icon" href="adonis-logo.png" type="image/png" />
 <script src="xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
@@ -4514,7 +4609,10 @@ const incentiveHTML = `\n<style>
       </div>
     </div>
     <div style="display:flex; flex-direction:column; align-items:flex-end;">
-      <div class="inc-fy-badge" style="margin-bottom: 4px;">FY 2026-27</div>
+      <div style="display:flex; gap: 8px; align-items:center; margin-bottom: 4px;">
+        <button id="incExportBtn" style="background:var(--accent); color:#FFF; border:none; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:11px; display:none;">&#11123; Download</button>
+        <div class="inc-fy-badge">FY 2026-27</div>
+      </div>
       <div id="inc-month-display" style="color:var(--gold-light); font-weight:600; font-size:11px;"></div>
     </div>
   </div>
@@ -5230,7 +5328,26 @@ async function renderIncentive() {
   const beName = beEmp ? (beEmp.name || beEmp.emp_id) : (session.name || session.emp_id);
   const incBeNameDisplay = document.getElementById('inc-be-name-display');
   if (incBeNameDisplay) {
-    incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/><span style="color:#FFF;">BE: ${beName}</span>`;
+    if (session.designation !== 'BE') {
+      const opts = typeof buildScopeOptionsHTML === 'function' ? buildScopeOptionsHTML(beEmpId) : '';
+      incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/>
+      <select id="incBeNameSel" style="background: transparent; color: #FFF; border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font-size: 14px; outline: none; cursor: pointer; margin-top:4px; max-width: 250px;">
+        ${opts}
+      </select>`;
+      setTimeout(() => {
+        const sel = document.getElementById('incBeNameSel');
+        if (sel) {
+          sel.onchange = () => {
+            selectedEmpId = sel.value;
+            const mainScopeSel = document.getElementById("scopeSel");
+            if (mainScopeSel) mainScopeSel.value = selectedEmpId;
+            renderIncentive();
+          };
+        }
+      }, 0);
+    } else {
+      incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/><span style="color:#FFF;">BE: ${beName}</span>`;
+    }
   }
 
   const incMonthDisplay = document.getElementById('inc-month-display');
