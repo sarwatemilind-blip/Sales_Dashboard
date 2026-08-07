@@ -5273,6 +5273,16 @@ async function renderIncentive() {
     }, 0);
   }
 
+  const exportBtn = document.getElementById('incExportBtn');
+  if (exportBtn) {
+    if (session.designation !== 'BE') {
+      exportBtn.style.display = 'block';
+      exportBtn.onclick = window.exportIncentives;
+    } else {
+      exportBtn.style.display = 'none';
+    }
+  }
+
   // 2. Determine cycles
   const ytdMonths = [];
   const order = [1,2,3,4,5,6,7,8,9,10,11,12];
