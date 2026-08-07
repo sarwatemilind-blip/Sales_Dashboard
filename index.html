@@ -5265,6 +5265,12 @@ async function renderIncentive() {
     return b === 'MV 30 TAB' || b === 'MV 30 SYRUP';
   };
 
+  const isPillarIncentiveBrand = (brand) => {
+    if (!brand) return false;
+    const b = brand.toUpperCase().trim();
+    return b === 'SERVIL JUNIOR' || b === 'SERVIL-LS JUNIOR';
+  };
+
   tgt.forEach(r => {
     const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
@@ -5272,7 +5278,7 @@ async function renderIncentive() {
     if (m === currentMonth) buckets.monthly.t += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.t += val;
-      if (getBrandCategory(r.brand) === 'Pillar') buckets.pillar.t += val;
+      if (isPillarIncentiveBrand(r.brand)) buckets.pillar.t += val;
       if (isBOTY(r.brand)) buckets.boty.t += val;
     }
   });
@@ -5284,7 +5290,7 @@ async function renderIncentive() {
     if (m === currentMonth) buckets.monthly.a += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.a += val;
-      if (getBrandCategory(r.brand) === 'Pillar') buckets.pillar.a += val;
+      if (isPillarIncentiveBrand(r.brand)) buckets.pillar.a += val;
       if (isBOTY(r.brand)) buckets.boty.a += val;
     }
   });
@@ -5296,7 +5302,7 @@ async function renderIncentive() {
     if (m === currentMonth) buckets.monthly.ly += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.ly += val;
-      if (getBrandCategory(r.brand) === 'Pillar') buckets.pillar.ly += val;
+      if (isPillarIncentiveBrand(r.brand)) buckets.pillar.ly += val;
       if (isBOTY(r.brand)) buckets.boty.ly += val;
     }
   });
