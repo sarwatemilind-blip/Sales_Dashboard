@@ -4993,6 +4993,10 @@ function calcSection(prefix, slabKey, criteria) {
       qualMsg = 'Blocked - Next Month < 90%';
     }
   }
+  if (prefix === 'a' && actual === 0) {
+    isQualifying = false;
+    qualMsg = 'Actual figures not captured';
+  }
 
   // Achievement display
   const achvEl = document.getElementById(prefix+'-achv-disp');
@@ -5054,15 +5058,31 @@ function calcHygiene() {
   pctEl.className = 'inc-metric-value' + (pct <= 0.006 ? ' good' : pct <= 0.01 ? '' : ' bad');
 
   const statusEl = document.getElementById('h-status-disp');
-  if (pct <= 0.006) { statusEl.textContent = 'Excellent'; statusEl.className = 'inc-metric-value good'; }
+  if (sales === 0) { statusEl.textContent = '-'; statusEl.className = 'inc-metric-value'; }
+  else if (pct <= 0.006) { statusEl.textContent = 'Excellent'; statusEl.className = 'inc-metric-value good'; }
   else if (pct <= 0.01) { statusEl.textContent = 'Moderate'; statusEl.className = 'inc-metric-value'; }
   else { statusEl.textContent = 'Poor'; statusEl.className = 'inc-metric-value bad'; }
 
   let earned = 0;
-  if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
-  else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
+  let isQualifying = true;
+  let qualMsg = '';
+  
+  if (sales === 0) {
+    isQualifying = false;
+    qualMsg = 'Actual sales data not captured';
+  } else {
+    if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
+    else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
+  }
 
   renderHygieneSlabs(pct, sales);
+  
+  const noIncMsg = document.getElementById('h-no-inc');
+  if (!isQualifying && noIncMsg) {
+    noIncMsg.style.display = 'block';
+    noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> - ${qualMsg}</span>`;
+  }
+
   document.getElementById('h-total-disp').textContent = fmt(earned);
   return earned;
 }
