@@ -4891,7 +4891,7 @@ function fmt(n) {
   if (n === 0) return '₹0';
   return '₹' + Math.round(n).toLocaleString('en-IN');
 }
-function fmtPct(n) {
+function incFmtPct(n) {
   const val = n * 100;
   let str = val.toFixed(2);
   if (str.endsWith('.00')) {
@@ -4935,11 +4935,11 @@ function renderSlabs(containerId, slabs, achvPct, actual, target, blocked, noInc
     const isActive = (i === activeIdx);
     const earn = isActive && !blocked ? actual * s.rate : 0;
     if (earn > 0) anyEarning = true;
-    const toStr = s.to === Infinity ? '∞' : fmtPct(s.to);
+    const toStr = s.to === Infinity ? '∞' : incFmtPct(s.to);
     h += `<div class="inc-slab-row${isActive ? ' active' : ''}" style="${isActive ? 'background:var(--brand);color:#fff;' : 'border-bottom:1px solid var(--line);'}">
       <span class="inc-slab-name" style="display:inline-block;width:60px;">${s.name}</span>
-      <span class="inc-slab-range" style="display:inline-block;width:120px;">${fmtPct(s.from)} – ${toStr}</span>
-      <span class="inc-slab-rate" style="display:inline-block;width:60px;">${fmtPct(s.rate)}</span>
+      <span class="inc-slab-range" style="display:inline-block;width:120px;">${incFmtPct(s.from)} – ${toStr}</span>
+      <span class="inc-slab-rate" style="display:inline-block;width:60px;">${incFmtPct(s.rate)}</span>
       <span class="inc-slab-earn" style="font-weight:bold; ${isActive && earn>0 ? 'color:#ffd580;' : 'color:var(--good);'}">${earn > 0 ? fmt(earn) : (isActive && blocked ? '—' : '')}</span>
     </div>`;
   });
@@ -4962,8 +4962,8 @@ function renderHygieneSlabs(achvPct, sales) {
     const earn = isActive ? sales * s.rate : 0;
     h += `<div class="inc-slab-row${isActive ? ' active' : ''}" style="${isActive ? 'background:var(--brand);color:#fff;' : 'border-bottom:1px solid var(--line);'}">
       <span class="inc-slab-name" style="display:inline-block;width:60px;">${s.name}</span>
-      <span class="inc-slab-range" style="display:inline-block;width:120px;">${fmtPct(s.from)} – ${fmtPct(s.to)}</span>
-      <span class="inc-slab-rate" style="display:inline-block;width:60px;">${fmtPct(s.rate)}</span>
+      <span class="inc-slab-range" style="display:inline-block;width:120px;">${incFmtPct(s.from)} – ${incFmtPct(s.to)}</span>
+      <span class="inc-slab-rate" style="display:inline-block;width:60px;">${incFmtPct(s.rate)}</span>
       <span class="inc-slab-earn" style="font-weight:bold; ${isActive && earn>0 ? 'color:#ffd580;' : 'color:var(--good);'}">${earn > 0 ? fmt(earn) : ''}</span>
     </div>`;
   });
@@ -4981,7 +4981,7 @@ function calcSection(prefix, slabKey) {
 
   // Achievement display
   const achvEl = document.getElementById(prefix+'-achv-disp');
-  achvEl.textContent = target > 0 ? fmtPct(achvPct) : '—';
+  achvEl.textContent = target > 0 ? incFmtPct(achvPct) : '—';
   achvEl.className = 'inc-metric-value' + (achvPct >= 1 ? ' good' : achvPct >= 0.9 ? '' : ' bad');
 
   // Growth display
@@ -4990,7 +4990,7 @@ function calcSection(prefix, slabKey) {
     growthEl.textContent = 'N/A';
     growthEl.className = 'inc-metric-value neutral';
   } else {
-    growthEl.textContent = (growth >= 0 ? '+' : '') + fmtPct(growth);
+    growthEl.textContent = (growth >= 0 ? '+' : '') + incFmtPct(growth);
     growthEl.className = 'inc-metric-value' + (growth > 0 ? ' good' : ' bad');
   }
 
@@ -5027,7 +5027,7 @@ function calcHygiene() {
   const pct = sales > 0 ? expiry / sales : 0;
 
   const pctEl = document.getElementById('h-pct-disp');
-  pctEl.textContent = sales > 0 ? fmtPct(pct) : '—';
+  pctEl.textContent = sales > 0 ? incFmtPct(pct) : '—';
   pctEl.className = 'inc-metric-value' + (pct <= 0.006 ? ' good' : pct <= 0.01 ? '' : ' bad');
 
   const statusEl = document.getElementById('h-status-disp');
@@ -5070,7 +5070,7 @@ function calcAll() {
     const amtClass = c.earned > 0 ? '' : ' zero';
     let statusHtml = '';
     if (c.blocked) statusHtml = '<div class="inc-sum-card-status status-degrowth" style="color:var(--danger);">Degrowth — blocked</div>';
-    else if (c.growth !== null) statusHtml = `<div class="inc-sum-card-status ${c.growth > 0 ? 'status-growth':'status-degrowth'}" style="color:${c.growth > 0 ? 'var(--good)':'var(--danger)'};">${c.growth >= 0 ? '+':'' }${fmtPct(c.growth)} vs LY</div>`;
+    else if (c.growth !== null) statusHtml = `<div class="inc-sum-card-status ${c.growth > 0 ? 'status-growth':'status-degrowth'}" style="color:${c.growth > 0 ? 'var(--good)':'var(--danger)'};">${c.growth >= 0 ? '+':'' }${incFmtPct(c.growth)} vs LY</div>`;
     else statusHtml = '<div class="inc-sum-card-status status-na" style="color:var(--muted);">No LY data</div>';
     gridHtml += `<div class="inc-sum-card" style="border:1px solid var(--line); padding:10px; border-radius:8px;">
       <div class="inc-sum-card-title">${c.label}</div>
