@@ -5537,7 +5537,7 @@ window.exportIncentives = async function() {
     XLSX.utils.book_append_sheet(wb, ws, "Incentives");
     
     const lbl = typeof monthLabel === 'function' ? monthLabel(currentMonth) : FY_MONTHS.find(m => m.n === currentMonth)?.label;
-    XLSX.writeFile(wb, \`Incentives_Report_\${lbl}_\${currentYear}.xlsx\`);
+    XLSX.writeFile(wb, `Incentives_Report_${lbl}_${currentYear}.xlsx`);
     
   } catch (err) {
     console.error(err);
