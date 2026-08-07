@@ -4993,7 +4993,10 @@ function calcSection(prefix, slabKey, criteria) {
       qualMsg = 'Blocked - Next Month < 90%';
     }
   }
-  if (prefix === 'a' && actual === 0) {
+  if (prefix === 'a' && window.currentMonth < 12) {
+    isQualifying = false;
+    qualMsg = 'Full year not completed';
+  } else if (prefix === 'a' && actual === 0) {
     isQualifying = false;
     qualMsg = 'Actual figures not captured';
   }
