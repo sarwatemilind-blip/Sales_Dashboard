@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Adonis Incentive Calculator 2026–27</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0B1F4B;
+    --navy-mid: #1A3A6B;
+    --navy-light: #2A5298;
+    --gold: #F5A623;
+    --gold-light: #FFD580;
+    --gold-pale: #FFF8E7;
+    --green: #00875A;
+    --green-light: #E3F9F1;
+    --red: #C0392B;
+    --red-light: #FDECEA;
+    --surface: #F4F6FB;
+    --card: #FFFFFF;
+    --border: #DDE3EE;
+    --text: #0B1F4B;
+    --muted: #6B7A99;
+    --pill-bg: #E8EDF8;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--surface);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 430px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  .app-header {
+    background: var(--navy);
+    padding: 20px 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 36px; height: 36px;
+    background: var(--gold);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--navy);
+  }
+  .brand-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+  .brand-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+  .fy-badge {
+    background: rgba(245,166,35,0.15);
+    border: 1px solid rgba(245,166,35,0.3);
+    color: var(--gold-light);
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+
+  /* TAB NAV */
+  .tab-nav {
+    display: flex;
+    gap: 4px;
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.45);
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 10px 4px 12px;
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+    transition: all 0.2s;
+    text-align: center;
+    line-height: 1.3;
+  }
+  .tab-btn.active {
+    color: var(--gold-light);
+    border-bottom-color: var(--gold);
+  }
+  .tab-btn .tab-icon { font-size: 16px; display: block; margin-bottom: 3px; }
+
+  /* MAIN CONTENT */
+  .content { padding: 16px; display: none; }
+  .content.active { display: block; }
+
+  /* TOTAL BANNER */
+  .total-banner {
+    background: var(--navy);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .total-banner::before {
+    content: '';
+    position: absolute;
+    right: -20px; top: -20px;
+    width: 120px; height: 120px;
+    background: rgba(245,166,35,0.08);
+    border-radius: 50%;
+  }
+  .total-banner::after {
+    content: '';
+    position: absolute;
+    right: 20px; top: 20px;
+    width: 60px; height: 60px;
+    background: rgba(245,166,35,0.06);
+    border-radius: 50%;
+  }
+  .total-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.5); letter-spacing: 1px; text-transform: uppercase; }
+  .total-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px; font-weight: 600;
+    color: var(--gold-light);
+    margin: 6px 0 4px;
+    letter-spacing: -1px;
+  }
+  .total-note { font-size: 11px; color: rgba(255,255,255,0.4); }
+  .degrowth-banner {
+    background: var(--red-light);
+    border: 1px solid #f5c6c2;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--red);
+    font-weight: 500;
+  }
+
+  /* SECTION CARDS */
+  .section-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-header-left { display: flex; align-items: center; gap: 10px; }
+  .section-icon {
+    width: 34px; height: 34px;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .icon-navy { background: #E8EDF8; color: var(--navy); }
+  .icon-gold { background: var(--gold-pale); color: #B8760A; }
+  .icon-green { background: var(--green-light); color: var(--green); }
+
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .section-period { font-size: 10px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+  .section-earned {
+    text-align: right;
+  }
+  .earned-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px; font-weight: 600;
+    color: var(--green);
+  }
+  .earned-amount.zero { color: var(--muted); }
+  .earned-amount.blocked { color: var(--red); font-size: 12px; font-family: 'Sora', sans-serif; }
+  .chevron { font-size: 16px; color: var(--muted); transition: transform 0.2s; margin-left: 8px; }
+  .section-card.open .chevron { transform: rotate(180deg); }
+
+  .section-body {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 16px;
+  }
+  .section-card.open .section-body { display: block; }
+
+  /* INPUTS */
+  .field-group { margin-bottom: 14px; }
+  .field-label {
+    font-size: 11px; font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .inp-wrap { position: relative; }
+  .inp-prefix {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    font-size: 13px; color: var(--muted); font-weight: 500;
+    pointer-events: none;
+  }
+  input[type="number"] {
+    width: 100%;
+    height: 42px;
+    border: 1.5px solid #C6D8F2;
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--text);
+    background: #EDF3FC;
+    padding: 0 12px 0 26px;
+    outline: none;
+    transition: all 0.2s ease-in-out;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input[type="number"]:focus { border-color: var(--navy); background: #ffffff; box-shadow: 0 0 0 3px rgba(11, 31, 75, 0.1); }
+  .inp-hint { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+  /* METRICS ROW */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .metric-card {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .metric-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px; font-weight: 600;
+    color: var(--text);
+    margin-top: 2px;
+  }
+  .metric-value.good { color: var(--green); }
+  .metric-value.bad { color: var(--red); }
+  .metric-value.neutral { color: var(--muted); }
+
+  /* SLAB TABLE */
+  .slab-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .slab-row {
+    display: flex; align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    background: var(--surface);
+    font-size: 12px;
+    transition: background 0.15s;
+  }
+  .slab-row.active-slab {
+    background: var(--navy);
+    color: #fff;
+  }
+  .slab-name { font-weight: 600; width: 46px; flex-shrink: 0; font-size: 11px; }
+  .slab-range { flex: 1; color: inherit; opacity: 0.7; font-size: 11px; }
+  .slab-rate { font-weight: 600; width: 36px; text-align: right; flex-shrink: 0; font-size: 11px; }
+  .slab-earn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600;
+    width: 68px; text-align: right; flex-shrink: 0;
+    color: var(--green);
+  }
+  .slab-row.active-slab .slab-earn { color: var(--gold-light); }
+  .slab-row.active-slab .slab-range { opacity: 0.65; }
+
+  /* HYGIENE SPECIAL */
+  .hygiene-note {
+    background: var(--green-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 11px;
+    color: #005c3a;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  /* SUMMARY TAB */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .sum-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .sum-card-title { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .sum-card-amt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px; font-weight: 600;
+    color: var(--text);
+  }
+  .sum-card-amt.zero { color: var(--muted); }
+  .sum-card-period { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .sum-card-status { font-size: 10px; margin-top: 4px; font-weight: 500; }
+  .status-growth { color: var(--green); }
+  .status-degrowth { color: var(--red); }
+  .status-na { color: var(--muted); }
+
+  .breakdown-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 20px 0 10px;
+  }
+  .breakdown-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-name { font-size: 13px; font-weight: 500; }
+  .breakdown-sub { font-size: 11px; color: var(--muted); }
+  .breakdown-amt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 600;
+    color: var(--green);
+  }
+  .breakdown-amt.zero { color: var(--muted); }
+
+  .grand-total-card {
+    background: var(--navy);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .gt-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); }
+  .gt-name { font-size: 15px; font-weight: 700; color: #fff; margin-top: 2px; }
+  .gt-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px; font-weight: 600;
+    color: var(--gold-light);
+  }
+
+  /* PROGRESS BAR */
+  .progress-wrap { margin: 10px 0 14px; }
+  .progress-bar-bg {
+    height: 6px;
+    background: var(--surface);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--navy-light);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+    max-width: 100%;
+  }
+  .progress-bar-fill.over { background: var(--green); }
+  .progress-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+
+  .no-incentive-msg {
+    text-align: center;
+    padding: 16px;
+    font-size: 12px;
+    color: var(--red);
+    font-weight: 500;
+    background: var(--red-light);
+    border-radius: var(--radius-sm);
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-logo">A</div>
+      <div>
+        <div class="brand-name">Adonis Incentives</div>
+        <div class="brand-sub">Sales Performance Calculator</div>
+      </div>
+    </div>
+    <div class="fy-badge">FY 2026–27</div>
+  </div>
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('monthly')" id="tab-monthly">
+      <span class="tab-icon">📅</span>Monthly
+    </button>
+    <button class="tab-btn" onclick="switchTab('bimonthly')" id="tab-bimonthly">
+      <span class="tab-icon">📆</span>Bimonthly
+    </button>
+    <button class="tab-btn" onclick="switchTab('annual')" id="tab-annual">
+      <span class="tab-icon">📈</span>Annual
+    </button>
+    <button class="tab-btn" onclick="switchTab('pillar')" id="tab-pillar">
+      <span class="tab-icon">🏛️</span>Pillar
+    </button>
+    <button class="tab-btn" onclick="switchTab('boty')" id="tab-boty">
+      <span class="tab-icon">🏆</span>BOTY
+    </button>
+    <button class="tab-btn" onclick="switchTab('hygiene')" id="tab-hygiene">
+      <span class="tab-icon">🧹</span>Hygiene
+    </button>
+    <button class="tab-btn" onclick="switchTab('summary')" id="tab-summary">
+      <span class="tab-icon">📊</span>Summary
+    </button>
+  </div>
+</div>
+
+<!-- MONTHLY -->
+<div class="content active" id="content-monthly">
+  <div class="total-banner">
+    <div class="total-label">Monthly Incentive Earned</div>
+    <div class="total-amount" id="m-total-disp">₹0</div>
+    <div class="total-note">Monthly Value Incentive · Period: 1 Month</div>
+  </div>
+  <div class="degrowth-banner" id="m-degrowth-banner">
+    ⚠️ Degrowth vs last year — no incentive payable
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left">
+        <div class="section-icon icon-navy">🎯</div>
+        <div>
+          <div class="section-title">Enter Inputs</div>
+          <div class="section-period">Enter performance values</div>
+        </div>
+      </div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="field-group">
+        <div class="field-row">
+          <div>
+            <div class="field-label">Target (₹)</div>
+            <div class="inp-wrap">
+              <span class="inp-prefix">₹</span>
+              <input type="number" id="m-target" placeholder="Enter target" min="0" oninput="calcAll()">
+            </div>
+          </div>
+          <div>
+            <div class="field-label">Actual (₹)</div>
+            <div class="inp-wrap">
+              <span class="inp-prefix">₹</span>
+              <input type="number" id="m-actual" placeholder="Enter actual" min="0" oninput="calcAll()">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+        <div class="inp-wrap">
+          <span class="inp-prefix">₹</span>
+          <input type="number" id="m-ly" placeholder="0" min="0" oninput="calcAll()">
+        </div>
+        <div class="inp-hint">Leave 0 if no LY data — growth check will be skipped</div>
+      </div>
+      <div class="metrics-row" id="m-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Achievement</div>
+          <div class="metric-value" id="m-achv-disp">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Growth vs LY</div>
+          <div class="metric-value" id="m-growth-disp">—</div>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="m-progress" style="width:0%"></div></div>
+        <div class="progress-labels"><span>0%</span><span>75%</span><span>95%</span><span>100%</span><span>105%+</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left">
+        <div class="section-icon icon-gold">💰</div>
+        <div>
+          <div class="section-title">Incentive Slabs</div>
+          <div class="section-period">Active slab highlighted</div>
+        </div>
+      </div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div id="m-slabs"></div>
+      <div class="no-incentive-msg" id="m-no-inc" style="display:none">No incentive — achievement below 90% threshold</div>
+    </div>
+  </div>
+</div>
+
+<!-- BIMONTHLY -->
+<div class="content" id="content-bimonthly">
+  <div class="total-banner">
+    <div class="total-label">Bimonthly Incentive Earned</div>
+    <div class="total-amount" id="b-total-disp">₹0</div>
+    <div class="total-note">Bimonthly Value Incentive · Period: 2 Months</div>
+  </div>
+  <div class="degrowth-banner" id="b-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left">
+        <div class="section-icon icon-navy">🎯</div>
+        <div><div class="section-title">Enter Inputs</div><div class="section-period">Enter performance values</div></div>
+      </div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="field-group">
+        <div class="field-row">
+          <div><div class="field-label">Target (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="b-target" placeholder="Enter target" min="0" oninput="calcAll()"></div></div>
+          <div><div class="field-label">Actual (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="b-actual" placeholder="Enter actual" min="0" oninput="calcAll()"></div></div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+        <div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="b-ly" placeholder="0" min="0" oninput="calcAll()"></div>
+        <div class="inp-hint">Leave 0 if no LY data</div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-label">Achievement</div><div class="metric-value" id="b-achv-disp">—</div></div>
+        <div class="metric-card"><div class="metric-label">Growth vs LY</div><div class="metric-value" id="b-growth-disp">—</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" id="b-progress" style="width:0%"></div></div><div class="progress-labels"><span>0%</span><span>75%</span><span>95%</span><span>100%</span><span>105%+</span></div></div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-gold">💰</div><div><div class="section-title">Incentive Slabs</div><div class="section-period">Active slab highlighted</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body"><div id="b-slabs"></div><div class="no-incentive-msg" id="b-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+  </div>
+</div>
+
+<!-- ANNUAL -->
+<div class="content" id="content-annual">
+  <div class="total-banner">
+    <div class="total-label">Annual Incentive Earned</div>
+    <div class="total-amount" id="a-total-disp">₹0</div>
+    <div class="total-note">Annual Value Incentive · Period: 12 Months</div>
+  </div>
+  <div class="degrowth-banner" id="a-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-navy">🎯</div><div><div class="section-title">Enter Inputs</div><div class="section-period">Enter performance values</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="field-group">
+        <div class="field-row">
+          <div><div class="field-label">Target (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="a-target" placeholder="Enter target" min="0" oninput="calcAll()"></div></div>
+          <div><div class="field-label">Actual (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="a-actual" placeholder="Enter actual" min="0" oninput="calcAll()"></div></div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+        <div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="a-ly" placeholder="0" min="0" oninput="calcAll()"></div>
+        <div class="inp-hint">Leave 0 if no LY data</div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-label">Achievement</div><div class="metric-value" id="a-achv-disp">—</div></div>
+        <div class="metric-card"><div class="metric-label">Growth vs LY</div><div class="metric-value" id="a-growth-disp">—</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" id="a-progress" style="width:0%"></div></div><div class="progress-labels"><span>0%</span><span>75%</span><span>95%</span><span>100%</span><span>105%+</span></div></div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-gold">💰</div><div><div class="section-title">Incentive Slabs</div><div class="section-period">Active slab highlighted</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body"><div id="a-slabs"></div><div class="no-incentive-msg" id="a-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+  </div>
+</div>
+
+<!-- PILLAR BRAND -->
+<div class="content" id="content-pillar">
+  <div class="total-banner">
+    <div class="total-label">Pillar Brand Incentive Earned</div>
+    <div class="total-amount" id="p-total-disp">₹0</div>
+    <div class="total-note">Pillar Brand Incentive · Period: 2 Months</div>
+  </div>
+  <div class="degrowth-banner" id="p-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-navy">🎯</div><div><div class="section-title">Enter Inputs</div><div class="section-period">Enter performance values</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="field-group">
+        <div class="field-row">
+          <div><div class="field-label">Target (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="p-target" placeholder="Enter target" min="0" oninput="calcAll()"></div></div>
+          <div><div class="field-label">Actual (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="p-actual" placeholder="Enter actual" min="0" oninput="calcAll()"></div></div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+        <div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="p-ly" placeholder="0" min="0" oninput="calcAll()"></div>
+        <div class="inp-hint">Leave 0 if no LY data</div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-label">Achievement</div><div class="metric-value" id="p-achv-disp">—</div></div>
+        <div class="metric-card"><div class="metric-label">Growth vs LY</div><div class="metric-value" id="p-growth-disp">—</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" id="p-progress" style="width:0%"></div></div><div class="progress-labels"><span>0%</span><span>75%</span><span>95%</span><span>100%</span><span>105%+</span></div></div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-gold">💰</div><div><div class="section-title">Incentive Slabs</div><div class="section-period">Active slab highlighted</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body"><div id="p-slabs"></div><div class="no-incentive-msg" id="p-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+  </div>
+</div>
+
+<!-- BOTY -->
+<div class="content" id="content-boty">
+  <div class="total-banner">
+    <div class="total-label">Brand of the Year Incentive</div>
+    <div class="total-amount" id="by-total-disp">₹0</div>
+    <div class="total-note">MV 30 Tab/Syp · Period: 2 Months</div>
+  </div>
+  <div class="degrowth-banner" id="by-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-navy">🎯</div><div><div class="section-title">Enter Inputs</div><div class="section-period">Enter performance values</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="field-group">
+        <div class="field-row">
+          <div><div class="field-label">Target (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="by-target" placeholder="Enter target" min="0" oninput="calcAll()"></div></div>
+          <div><div class="field-label">Actual (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="by-actual" placeholder="Enter actual" min="0" oninput="calcAll()"></div></div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+        <div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="by-ly" placeholder="0" min="0" oninput="calcAll()"></div>
+        <div class="inp-hint">Leave 0 if no LY data</div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-label">Achievement</div><div class="metric-value" id="by-achv-disp">—</div></div>
+        <div class="metric-card"><div class="metric-label">Growth vs LY</div><div class="metric-value" id="by-growth-disp">—</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" id="by-progress" style="width:0%"></div></div><div class="progress-labels"><span>0%</span><span>75%</span><span>95%</span><span>100%</span><span>105%+</span></div></div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-gold">💰</div><div><div class="section-title">Incentive Slabs</div><div class="section-period">Active slab highlighted</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body"><div id="by-slabs"></div><div class="no-incentive-msg" id="by-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+  </div>
+</div>
+
+<!-- HYGIENE -->
+<div class="content" id="content-hygiene">
+  <div class="total-banner" style="background: #004D35;">
+    <div class="total-label">Sales Hygiene Incentive</div>
+    <div class="total-amount" id="h-total-disp">₹0</div>
+    <div class="total-note">Expiry/Breakage Control · Period: 4 Months</div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-green">📦</div><div><div class="section-title">Enter Inputs</div><div class="section-period">Sales & Expiry Values</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body">
+      <div class="hygiene-note">
+        Lower expiry as a % of sales = better hygiene = higher incentive. No growth condition applies to this incentive.
+      </div>
+      <div class="field-group">
+        <div class="field-row">
+          <div><div class="field-label">Sales Value (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="h-sales" placeholder="Enter sales" min="0" oninput="calcAll()"></div></div>
+          <div><div class="field-label">Expiry/Breakage (₹)</div><div class="inp-wrap"><span class="inp-prefix">₹</span><input type="number" id="h-expiry" placeholder="Enter expiry" min="0" oninput="calcAll()"></div></div>
+        </div>
+      </div>
+      <div class="metrics-row">
+        <div class="metric-card"><div class="metric-label">Expiry % of Sales</div><div class="metric-value" id="h-pct-disp">—</div></div>
+        <div class="metric-card"><div class="metric-label">Hygiene Status</div><div class="metric-value" id="h-status-disp">—</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="section-card open">
+    <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-header-left"><div class="section-icon icon-green">💰</div><div><div class="section-title">Incentive Slabs</div><div class="section-period">Based on expiry % of sales</div></div></div>
+      <span class="chevron">⌄</span>
+    </div>
+    <div class="section-body"><div id="h-slabs"></div><div class="no-incentive-msg" id="h-no-inc" style="display:none">No incentive — expiry exceeds 1% of sales</div></div>
+  </div>
+</div>
+
+<!-- SUMMARY -->
+<div class="content" id="content-summary">
+  <div class="grand-total-card" style="margin-bottom:16px; border-radius:var(--radius);">
+    <div>
+      <div class="gt-label">Total Incentive Earned</div>
+      <div class="gt-name">All Categories Combined</div>
+    </div>
+    <div class="gt-amount" id="grand-total-disp">₹0</div>
+  </div>
+  <div class="summary-grid" id="summary-grid"></div>
+  <div class="breakdown-title">Category Breakdown</div>
+  <div id="breakdown-list"></div>
+</div>
+
+<script>
+const SLABS = {
+  monthly: [
+    {name:'Slab 1', from:0, to:0.75, rate:0},
+    {name:'Slab 2', from:0.90, to:0.9499, rate:0.015},
+    {name:'Slab 3', from:0.95, to:0.9999, rate:0.0175},
+    {name:'Slab 4', from:1.00, to:1.0499, rate:0.020},
+    {name:'Slab 5', from:1.05, to:Infinity, rate:0.0225},
+  ],
+  bimonthly: [
+    {name:'Slab 1', from:0, to:0.75, rate:0},
+    {name:'Slab 2', from:0.90, to:0.9499, rate:0.005},
+    {name:'Slab 3', from:0.95, to:0.9999, rate:0.0075},
+    {name:'Slab 4', from:1.00, to:1.0499, rate:0.010},
+    {name:'Slab 5', from:1.05, to:Infinity, rate:0.011},
+  ],
+  annual: [
+    {name:'Slab 1', from:0, to:0.75, rate:0},
+    {name:'Slab 2', from:0.90, to:0.9499, rate:0.005},
+    {name:'Slab 3', from:0.95, to:0.9999, rate:0.0075},
+    {name:'Slab 4', from:1.00, to:1.0499, rate:0.010},
+    {name:'Slab 5', from:1.05, to:Infinity, rate:0.011},
+  ],
+  pillar: [
+    {name:'Slab 1', from:0, to:0.75, rate:0},
+    {name:'Slab 2', from:0.90, to:0.9499, rate:0.0125},
+    {name:'Slab 3', from:0.95, to:0.9999, rate:0.015},
+    {name:'Slab 4', from:1.00, to:1.0499, rate:0.020},
+    {name:'Slab 5', from:1.05, to:Infinity, rate:0.020},
+  ],
+  boty: [
+    {name:'Slab 1', from:0, to:0.75, rate:0},
+    {name:'Slab 2', from:0.90, to:0.9499, rate:0.015},
+    {name:'Slab 3', from:0.95, to:0.9999, rate:0.0175},
+    {name:'Slab 4', from:1.00, to:1.0499, rate:0.0225},
+    {name:'Slab 5', from:1.05, to:Infinity, rate:0.0225},
+  ]
+};
+
+const HYGIENE_SLABS = [
+  {name:'Slab 1', from:0, to:0.006, rate:0.010},
+  {name:'Slab 2', from:0.006, to:0.010, rate:0.005},
+];
+
+function fmt(n) {
+  if (n === 0) return '₹0';
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+function fmtPct(n) {
+  const val = n * 100;
+  let str = val.toFixed(2);
+  if (str.endsWith('.00')) {
+    str = val.toFixed(1);
+  } else if (str.endsWith('0')) {
+    str = str.slice(0, -1);
+  }
+  return str + '%';
+}
+
+function calcIncentive(achvPct, actual, target, slabs) {
+  for (let s of slabs) {
+    if (achvPct >= s.from && achvPct <= s.to) {
+      return actual * s.rate;
+    }
+  }
+  // Slab 5 catch (No Limit)
+  const s5 = slabs[slabs.length - 1];
+  if (achvPct >= s5.from) {
+    return actual * s5.rate;
+  }
+  return 0;
+}
+
+function renderSlabs(containerId, slabs, achvPct, actual, target, blocked, noIncId) {
+  const container = document.getElementById(containerId);
+  const noInc = document.getElementById(noIncId);
+  let html = '';
+  let anyEarning = false;
+  let activeIdx = -1;
+
+  // Find active slab
+  for (let i = 0; i < slabs.length; i++) {
+    const s = slabs[i];
+    const hi = s.to === Infinity ? Infinity : s.to;
+    if (achvPct >= s.from && achvPct <= hi) { activeIdx = i; break; }
+  }
+  if (achvPct >= slabs[slabs.length-1].from) activeIdx = slabs.length - 1;
+
+  slabs.forEach((s, i) => {
+    const isActive = (i === activeIdx);
+    const earn = isActive && !blocked ? actual * s.rate : 0;
+    if (earn > 0) anyEarning = true;
+    const toStr = s.to === Infinity ? '∞' : fmtPct(s.to);
+    html += `<div class="slab-row${isActive ? ' active-slab' : ''}">
+      <span class="slab-name">${s.name}</span>
+      <span class="slab-range">${fmtPct(s.from)} – ${toStr}</span>
+      <span class="slab-rate">${fmtPct(s.rate)}</span>
+      <span class="slab-earn">${earn > 0 ? fmt(earn) : (isActive && blocked ? '—' : '')}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+  const showNoInc = (activeIdx <= 0 || (activeIdx === 0 && slabs[0].rate === 0)) && !blocked;
+  noInc.style.display = showNoInc ? 'block' : 'none';
+}
+
+function renderHygieneSlabs(achvPct, sales) {
+  const container = document.getElementById('h-slabs');
+  const noInc = document.getElementById('h-no-inc');
+  let html = '';
+  let activeIdx = -1;
+  HYGIENE_SLABS.forEach((s,i) => {
+    const lo = i===0 ? achvPct >= s.from : achvPct > s.from;
+    if (lo && achvPct <= s.to) activeIdx = i;
+  });
+  HYGIENE_SLABS.forEach((s,i) => {
+    const isActive = i === activeIdx;
+    const earn = isActive ? sales * s.rate : 0;
+    html += `<div class="slab-row${isActive ? ' active-slab' : ''}">
+      <span class="slab-name">${s.name}</span>
+      <span class="slab-range">${fmtPct(s.from)} – ${fmtPct(s.to)}</span>
+      <span class="slab-rate">${fmtPct(s.rate)}</span>
+      <span class="slab-earn">${earn > 0 ? fmt(earn) : ''}</span>
+    </div>`;
+  });
+  container.innerHTML = html;
+  noInc.style.display = (activeIdx < 0) ? 'block' : 'none';
+}
+
+function calcSection(prefix, slabKey) {
+  const target = parseFloat(document.getElementById(prefix+'-target').value) || 0;
+  const actual = parseFloat(document.getElementById(prefix+'-actual').value) || 0;
+  const ly = parseFloat(document.getElementById(prefix+'-ly').value) || 0;
+  const achvPct = target > 0 ? actual / target : 0;
+  const growth = ly > 0 ? (actual / ly - 1) : null;
+  const blocked = ly > 0 && growth <= 0;
+
+  // Achievement display
+  const achvEl = document.getElementById(prefix+'-achv-disp');
+  achvEl.textContent = target > 0 ? fmtPct(achvPct) : '—';
+  achvEl.className = 'metric-value' + (achvPct >= 1 ? ' good' : achvPct >= 0.9 ? '' : ' bad');
+
+  // Growth display
+  const growthEl = document.getElementById(prefix+'-growth-disp');
+  if (growth === null) {
+    growthEl.textContent = 'N/A';
+    growthEl.className = 'metric-value neutral';
+  } else {
+    growthEl.textContent = (growth >= 0 ? '+' : '') + fmtPct(growth);
+    growthEl.className = 'metric-value' + (growth > 0 ? ' good' : ' bad');
+  }
+
+  // Progress bar
+  const pbar = document.getElementById(prefix+'-progress');
+  const pct = Math.min(achvPct * 100, 110);
+  pbar.style.width = pct + '%';
+  pbar.className = 'progress-bar-fill' + (achvPct >= 1 ? ' over' : '');
+
+  // Degrowth banner
+  const banner = document.getElementById(prefix+'-degrowth-banner');
+  banner.style.display = blocked ? 'flex' : 'none';
+
+  // Calculate incentive
+  const slabs = SLABS[slabKey];
+  let earned = 0;
+  if (!blocked) {
+    earned = calcIncentive(achvPct, actual, target, slabs);
+  }
+
+  // Render slabs
+  const slabPrefix = {monthly:'m',bimonthly:'b',annual:'a',pillar:'p',boty:'by'}[slabKey];
+  renderSlabs(slabPrefix+'-slabs', slabs, achvPct, actual, target, blocked, slabPrefix+'-no-inc');
+
+  // Total display
+  document.getElementById(slabPrefix+'-total-disp').textContent = fmt(earned);
+
+  return {earned, blocked, achvPct, growth};
+}
+
+function calcHygiene() {
+  const sales = parseFloat(document.getElementById('h-sales').value) || 0;
+  const expiry = parseFloat(document.getElementById('h-expiry').value) || 0;
+  const pct = sales > 0 ? expiry / sales : 0;
+
+  const pctEl = document.getElementById('h-pct-disp');
+  pctEl.textContent = sales > 0 ? fmtPct(pct) : '—';
+  pctEl.className = 'metric-value' + (pct <= 0.006 ? ' good' : pct <= 0.01 ? '' : ' bad');
+
+  const statusEl = document.getElementById('h-status-disp');
+  if (pct <= 0.006) { statusEl.textContent = 'Excellent'; statusEl.className = 'metric-value good'; }
+  else if (pct <= 0.01) { statusEl.textContent = 'Moderate'; statusEl.className = 'metric-value'; }
+  else { statusEl.textContent = 'Poor'; statusEl.className = 'metric-value bad'; }
+
+  let earned = 0;
+  if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
+  else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
+
+  renderHygieneSlabs(pct, sales);
+  document.getElementById('h-total-disp').textContent = fmt(earned);
+  return earned;
+}
+
+function calcAll() {
+  const m = calcSection('m', 'monthly');
+  const b = calcSection('b', 'bimonthly');
+  const a = calcSection('a', 'annual');
+  const p = calcSection('p', 'pillar');
+  const by = calcSection('by', 'boty');
+  const h = calcHygiene();
+
+  const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
+  document.getElementById('grand-total-disp').textContent = fmt(total);
+
+  // Summary cards
+  const categories = [
+    {key:'monthly', label:'Monthly', period:'1 Month', earned:m.earned, blocked:m.blocked, growth:m.growth},
+    {key:'bimonthly', label:'Bimonthly', period:'2 Months', earned:b.earned, blocked:b.blocked, growth:b.growth},
+    {key:'annual', label:'Annual', period:'12 Months', earned:a.earned, blocked:a.blocked, growth:a.growth},
+    {key:'pillar', label:'Pillar Brand', period:'2 Months', earned:p.earned, blocked:p.blocked, growth:p.growth},
+    {key:'boty', label:'BOTY', period:'2 Months', earned:by.earned, blocked:by.blocked, growth:by.growth},
+    {key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:h, blocked:false, growth:null},
+  ];
+
+  let gridHtml = '';
+  categories.forEach(c => {
+    const amtClass = c.earned > 0 ? '' : ' zero';
+    let statusHtml = '';
+    if (c.blocked) statusHtml = '<div class="sum-card-status status-degrowth">Degrowth — blocked</div>';
+    else if (c.growth !== null) statusHtml = `<div class="sum-card-status ${c.growth > 0 ? 'status-growth':'status-degrowth'}">${c.growth >= 0 ? '+':'' }${fmtPct(c.growth)} vs LY</div>`;
+    else statusHtml = '<div class="sum-card-status status-na">No LY data</div>';
+    gridHtml += `<div class="sum-card">
+      <div class="sum-card-title">${c.label}</div>
+      <div class="sum-card-amt${amtClass}">${fmt(c.earned)}</div>
+      <div class="sum-card-period">${c.period}</div>
+      ${statusHtml}
+    </div>`;
+  });
+  document.getElementById('summary-grid').innerHTML = gridHtml;
+
+  let breakHtml = '';
+  categories.forEach(c => {
+    const amtClass = c.earned > 0 ? '' : ' zero';
+    breakHtml += `<div class="breakdown-row">
+      <div><div class="breakdown-name">${c.label} Incentive</div><div class="breakdown-sub">${c.period}${c.blocked?' · ⚠️ Blocked':''}</div></div>
+      <div class="breakdown-amt${amtClass}">${fmt(c.earned)}</div>
+    </div>`;
+  });
+  document.getElementById('breakdown-list').innerHTML = breakHtml;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('content-' + tab).classList.add('active');
+}
+
+function toggleSection(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+calcAll();
+</script>
+</body>
+</html>
