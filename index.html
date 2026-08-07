@@ -5053,7 +5053,9 @@ function calcSection(prefix, slabKey, criteria) {
 
 function calcHygiene() {
   const sales = parseFloat(document.getElementById('h-sales').value) || 0;
-  const expiry = parseFloat(document.getElementById('h-expiry').value) || 0;
+  const expiryInput = document.getElementById('h-expiry').value;
+  const expiry = parseFloat(expiryInput) || 0;
+  const isExpiryEntered = expiryInput.trim() !== '';
   const pct = sales > 0 ? expiry / sales : 0;
 
   const pctEl = document.getElementById('h-pct-disp');
@@ -5076,6 +5078,9 @@ function calcHygiene() {
   } else if (sales === 0) {
     isQualifying = false;
     qualMsg = 'Actual sales data not captured';
+  } else if (!isExpiryEntered) {
+    isQualifying = false;
+    qualMsg = 'Expiry data not entered';
   } else {
     if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
     else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
