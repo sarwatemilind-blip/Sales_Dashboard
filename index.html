@@ -1538,7 +1538,7 @@ async function loadDashboardData(){
     Others: { targetVal: 0, achVal: 0, lastYearVal: 0 }
   };
 
-  mark("tgt foreach"); tgt.forEach(r => {
+  tgt.forEach(r => {
     const cat = getBrandCategory(r.brand);
     categorySummary[cat].targetVal += (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
   });
@@ -5203,7 +5203,7 @@ function toggleSection(header) {
 
 async function renderIncentive() {
   const main = document.getElementById('main');
-  mark("setting HTML"); main.innerHTML = incentiveHTML;
+  main.innerHTML = incentiveHTML;
 
   // 1. Must be viewing a specific BE
   let isBE = false;
@@ -5311,7 +5311,7 @@ async function renderIncentive() {
     if (month === 11 || month === 12) return [11, 12];
     return [];
   }
-  mark("biCycle"); const biCycle = getBimonthlyCycle(currentMonth);
+  const biCycle = getBimonthlyCycle(currentMonth);
 
   // 3. Fetch data for YTD
   async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal) {
@@ -5355,13 +5355,13 @@ async function renderIncentive() {
     return allRows;
   }
 
-  mark("fetchMonths"); const fetchMonths = [...ytdMonths];
+  const fetchMonths = [...ytdMonths];
   if (biCycle && biCycle.length === 2) {
     const nxtM = (biCycle[1] % 12) + 1;
     if (!fetchMonths.includes(nxtM)) fetchMonths.push(nxtM);
   }
 
-  mark("pre Promise.all"); let tgt = [], ach = [], lastYear = [];
+  let tgt = [], ach = [], lastYear = [];
   try {
     const res = await Promise.all([
       fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, fetchMonths),
@@ -5374,7 +5374,7 @@ async function renderIncentive() {
   }
 
   // Determine Target Multiplier for actuals
-  mark("post Promise.all"); const targetMultiplier = await (async () => {
+  const targetMultiplier = await (async () => {
     let mul = 1.0;
     try {
       const { data } = await sb.from('users').select('designation').eq('emp_id', beEmpId).single();
@@ -5422,7 +5422,7 @@ async function renderIncentive() {
     }
   });
 
-  mark("ach foreach"); ach.forEach(r => {
+  ach.forEach(r => {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.a += val;
@@ -5450,7 +5450,7 @@ async function renderIncentive() {
   });
 
   // 5. Hydrate UI
-  mark("setVal"); const setVal = (id, val) => {
+  const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) { el.value = Math.round(val); el.readOnly = true; el.style.backgroundColor = '#f4f6fb'; }
   };
