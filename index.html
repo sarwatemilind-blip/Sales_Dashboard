@@ -4174,16 +4174,16 @@ const incentiveHTML = `\n<style>
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; font-weight: 700; color: var(--navy);
   }
-  .inc-brand-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.inc-3px; }
-  .inc-brand-sub { font-size: 11px; color: rgba(255,255,255,0.inc-5); margin-top: 1px; }
+  .inc-brand-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -1.2px; }
+  .inc-brand-sub { font-size: 11px; color: rgba(255,255,255,1.2); margin-top: 1px; }
   .inc-fy-badge {
-    background: rgba(245,166,35,0.inc-15);
-    border: 1px solid rgba(245,166,35,0.inc-3);
+    background: rgba(245,166,35,1.2);
+    border: 1px solid rgba(245,166,35,1.2);
     color: var(--gold-light);
     font-size: 11px; font-weight: 600;
     padding: 4px 10px;
     border-radius: 20px;
-    letter-spacing: 0.inc-5px;
+    letter-spacing: 1.2px;
   }
 
   /* TAB NAV */
@@ -4196,17 +4196,17 @@ const incentiveHTML = `\n<style>
     flex: 1;
     background: none;
     border: none;
-    color: rgba(255,255,255,0.inc-45);
+    color: rgba(255,255,255,1.2);
     font-family: 'Sora', sans-serif;
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.inc-3px;
+    letter-spacing: 1.2px;
     padding: 10px 4px 12px;
     cursor: pointer;
-    border-bottom: 2.inc-5px solid transparent;
-    transition: all 0.inc-2s;
+    border-bottom: 1.2px solid transparent;
+    transition: all 1.2s;
     text-align: center;
-    line-height: 1.inc-3;
+    line-height: 1.2;
   }
   .inc-tab-btn.active {
     color: var(--gold-light);
@@ -4251,7 +4251,7 @@ const incentiveHTML = `\n<style>
     margin: 6px 0 4px;
     letter-spacing: -1px;
   }
-  .inc-total-note { font-size: 11px; color: rgba(255,255,255,0.inc-4); }
+  .inc-total-note { font-size: 11px; color: rgba(255,255,255,1.2); }
   .inc-degrowth-banner {
     background: var(--red-light);
     border: 1px solid #f5c6c2;
@@ -4307,7 +4307,7 @@ const incentiveHTML = `\n<style>
   }
   .inc-earned-amount.zero { color: var(--muted); }
   .inc-earned-amount.inc-blocked { color: var(--red); font-size: 12px; font-family: 'Sora', sans-serif; }
-  .inc-chevron { font-size: 16px; color: var(--muted); transition: transform 0.inc-2s; margin-left: 8px; }
+  .inc-chevron { font-size: 16px; color: var(--muted); transition: transform 1.2s; margin-left: 8px; }
   .inc-section-card.open .inc-chevron { transform: rotate(180deg); }
 
   .inc-section-
@@ -4318,7 +4318,7 @@ const incentiveHTML = `\n<style>
   .inc-field-label {
     font-size: 11px; font-weight: 600;
     color: var(--muted);
-    letter-spacing: 0.inc-5px;
+    letter-spacing: 1.2px;
     margin-bottom: 6px;
     text-transform: uppercase;
   }
@@ -4332,7 +4332,7 @@ const incentiveHTML = `\n<style>
   .inc-container input[type="number"] {
     width: 100%;
     height: 42px;
-    border: 1.inc-5px solid #C6D8F2;
+    border: 1.2px solid #C6D8F2;
     border-radius: var(--radius-sm);
     font-family: 'JetBrains Mono', monospace;
     font-size: 14px;
@@ -4340,12 +4340,12 @@ const incentiveHTML = `\n<style>
     background: #EDF3FC;
     padding: 0 12px 0 26px;
     outline: none;
-    transition: all 0.inc-2s ease-in-out;
+    transition: all 1.2s ease-in-out;
     -moz-appearance: textfield;
   }
   .inc-container input[type="number"]::-webkit-outer-spin-button,
   .inc-container input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
-  .inc-container input[type="number"]:focus { border-color: var(--navy); background: #ffffff; box-shadow: 0 0 0 3px rgba(11, 31, 75, 0.inc-1); }
+  .inc-container input[type="number"]:focus { border-color: var(--navy); background: #ffffff; box-shadow: 0 0 0 3px rgba(11, 31, 75, 1.2); }
   .inc-inp-hint { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
   /* METRICS ROW */
@@ -4360,7 +4360,7 @@ const incentiveHTML = `\n<style>
     border-radius: var(--radius-sm);
     padding: 10px 12px;
   }
-  .inc-metric-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.inc-4px; }
+  .inc-metric-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; }
   .inc-metric-value {
     font-family: 'JetBrains Mono', monospace;
     font-size: 18px; font-weight: 600;
@@ -4372,7 +4372,7 @@ const incentiveHTML = `\n<style>
   .inc-metric-value.neutral { color: var(--muted); }
 
   /* SLAB TABLE */
-  .inc-slab-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.inc-5px; margin-bottom: 8px; }
+  .inc-slab-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
   .inc-slab-row {
     display: flex; align-items: center;
     padding: 8px 10px;
@@ -4380,14 +4380,14 @@ const incentiveHTML = `\n<style>
     margin-bottom: 4px;
     background: var(--surface);
     font-size: 12px;
-    transition: background 0.inc-15s;
+    transition: background 1.2s;
   }
   .inc-slab-row.inc-active-slab {
     background: var(--navy);
     color: #fff;
   }
   .inc-slab-name { font-weight: 600; width: 46px; flex-shrink: 0; font-size: 11px; }
-  .inc-slab-range { flex: 1; color: inherit; opacity: 0.inc-7; font-size: 11px; }
+  .inc-slab-range { flex: 1; color: inherit; opacity: 1.2; font-size: 11px; }
   .inc-slab-rate { font-weight: 600; width: 36px; text-align: right; flex-shrink: 0; font-size: 11px; }
   .inc-slab-earn {
     font-family: 'JetBrains Mono', monospace;
@@ -4396,7 +4396,7 @@ const incentiveHTML = `\n<style>
     color: var(--green);
   }
   .inc-slab-row.inc-active-slab .inc-slab-earn { color: var(--gold-light); }
-  .inc-slab-row.inc-active-slab .inc-slab-range { opacity: 0.inc-65; }
+  .inc-slab-row.inc-active-slab .inc-slab-range { opacity: 1.2; }
 
   /* HYGIENE SPECIAL */
   .inc-hygiene-note {
@@ -4406,7 +4406,7 @@ const incentiveHTML = `\n<style>
     font-size: 11px;
     color: #005c3a;
     margin-bottom: 12px;
-    line-height: 1.inc-5;
+    line-height: 1.2;
   }
 
   /* SUMMARY TAB */
@@ -4438,7 +4438,7 @@ const incentiveHTML = `\n<style>
   .inc-breakdown-title {
     font-size: 12px; font-weight: 600;
     color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.inc-5px;
+    letter-spacing: 1.2px;
     margin: 20px 0 10px;
   }
   .inc-breakdown-row {
@@ -4463,7 +4463,7 @@ const incentiveHTML = `\n<style>
     margin-top: 16px;
     display: flex; align-items: center; justify-content: space-between;
   }
-  .inc-gt-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.inc-5); }
+  .inc-gt-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,1.2); }
   .inc-gt-name { font-size: 15px; font-weight: 700; color: #fff; margin-top: 2px; }
   .inc-gt-amount {
     font-family: 'JetBrains Mono', monospace;
@@ -4484,7 +4484,7 @@ const incentiveHTML = `\n<style>
     height: 100%;
     background: var(--navy-light);
     border-radius: 3px;
-    transition: width 0.inc-4s ease;
+    transition: width 1.2s ease;
     max-width: 100%;
   }
   .inc-progress-bar-fill.over { background: var(--green); }
