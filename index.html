@@ -4536,10 +4536,10 @@ const incentiveHTML = `\n<style>
       <span class="inc-tab-icon">📈</span>Annual
     </button>
     <button class="inc-tab-btn" onclick="switchTab('pillar')" id="tab-pillar">
-      <span class="inc-tab-icon">🏛️</span>Pillar
+      <span class="inc-tab-icon">🏛️</span>Servil Jr/LS Jr
     </button>
     <button class="inc-tab-btn" onclick="switchTab('boty')" id="tab-boty">
-      <span class="inc-tab-icon">🏆</span>BOTY
+      <span class="inc-tab-icon">🏆</span>MV 30 Tab/Syp
     </button>
     <button class="inc-tab-btn" onclick="switchTab('hygiene')" id="tab-hygiene">
       <span class="inc-tab-icon">🧹</span>Hygiene
@@ -4720,9 +4720,9 @@ const incentiveHTML = `\n<style>
 <!-- PILLAR BRAND -->
 <div class="inc-content" id="content-pillar">
   <div class="inc-total-banner">
-    <div class="inc-total-label">Pillar Brand Incentive Earned</div>
+    <div class="inc-total-label">Servil Jr/Servil LS Jr Incentive Earned</div>
     <div class="inc-total-amount" id="p-total-disp">₹0</div>
-    <div class="inc-total-note">Pillar Brand Incentive · Period: 2 Months</div>
+    <div class="inc-total-note">Servil Jr/Servil LS Jr Incentive · Period: 2 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="p-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
   <div class="inc-section-card open">
@@ -4761,9 +4761,9 @@ const incentiveHTML = `\n<style>
 <!-- BOTY -->
 <div class="inc-content" id="content-boty">
   <div class="inc-total-banner">
-    <div class="inc-total-label">Brand of the Year Incentive</div>
+    <div class="inc-total-label">MV 30 Tab/Syp Incentive Earned</div>
     <div class="inc-total-amount" id="by-total-disp">₹0</div>
-    <div class="inc-total-note">MV 30 Tab/Syp · Period: 2 Months</div>
+    <div class="inc-total-note">MV 30 Tab/Syp Incentive · Period: 2 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="by-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
   <div class="inc-section-card open">
@@ -5133,10 +5133,6 @@ function calcAll() {
   const b = calcSection('b', 'bimonthly');
   const a = calcSection('a', 'annual');
 
-  const bTarget = parseFloat(document.getElementById('b-target').value) || 0;
-  const bActual = parseFloat(document.getElementById('b-actual').value) || 0;
-  const bAchvPct = bTarget > 0 ? bActual / bTarget : 0;
-
   const pNextTarget = window.buckets ? window.buckets.pillarNext.t : 0;
   const pNextActual = window.buckets ? window.buckets.pillarNext.a : 0;
   const pNextAchvPct = pNextTarget > 0 ? pNextActual / pNextTarget : 0;
@@ -5157,8 +5153,8 @@ function calcAll() {
     {key:'monthly', label:'Monthly', period:'1 Month', earned:m.earned, blocked:m.blocked, growth:m.growth},
     {key:'bimonthly', label:'Bimonthly', period:'2 Months', earned:b.earned, blocked:b.blocked, growth:b.growth},
     {key:'annual', label:'Annual', period:'12 Months', earned:a.earned, blocked:a.blocked, growth:a.growth},
-    {key:'pillar', label:'Pillar Brand', period:'2 Months', earned:p.earned, blocked:p.blocked, growth:p.growth},
-    {key:'boty', label:'BOTY', period:'2 Months', earned:by.earned, blocked:by.blocked, growth:by.growth},
+    {key:'pillar', label:'Servil Jr/LS Jr', period:'2 Months', earned:p.earned, blocked:p.blocked, growth:p.growth},
+    {key:'boty', label:'MV 30 Tab/Syp', period:'2 Months', earned:by.earned, blocked:by.blocked, growth:by.growth},
     {key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:h, blocked:false, growth:null},
   ];
 
@@ -5421,6 +5417,12 @@ async function renderIncentive() {
   };
 
   const isPillarIncentiveBrand = (brand) => {
+    if (!brand) return false;
+    const b = brand.toUpperCase().trim();
+    return b === 'SERVIL JUNIOR' || b === 'SERVIL-LS JUNIOR';
+  };
+
+  const is12PillarBrands = (brand) => {
     return getBrandCategory(brand) === 'Pillar';
   };
 
@@ -5430,7 +5432,7 @@ async function renderIncentive() {
     buckets.annual.t += val;
     if (m === currentMonth) {
       buckets.monthly.t += val;
-      if (isPillarIncentiveBrand(r.brand)) buckets.monthlyPillarCurrent.t += val;
+      if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.t += val;
     }
     if (m === strictlyNextMonth) buckets.monthlyNext.t += val;
     if (biCycle.includes(m)) {
@@ -5449,7 +5451,7 @@ async function renderIncentive() {
     buckets.annual.a += val;
     if (m === currentMonth) {
       buckets.monthly.a += val;
-      if (isPillarIncentiveBrand(r.brand)) buckets.monthlyPillarCurrent.a += val;
+      if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.a += val;
     }
     if (m === strictlyNextMonth) buckets.monthlyNext.a += val;
     if (biCycle.includes(m)) {
