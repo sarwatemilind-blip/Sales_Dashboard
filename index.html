@@ -4996,6 +4996,11 @@ function calcSection(prefix, slabKey, criteria) {
       isQualifying = false;
       qualMsg = `Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (< 90%)`;
     }
+    if (criteria.pillarCurrentMonthAchvPct !== undefined && criteria.pillarCurrentMonthAchvPct < 0.90) {
+      isQualifying = false;
+      const pMsg = `Pillar brands achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + pMsg : pMsg;
+    }
   }
   if (prefix === 'a' && currentMonth < 12) {
     isQualifying = false;
@@ -5045,15 +5050,18 @@ function calcSection(prefix, slabKey, criteria) {
   if (noIncMsg) {
     if (!isQualifying) {
       noIncMsg.style.display = 'block';
-      const prefix = (criteria && criteria.nextMonthAchvPct !== undefined) ? 'Blocked' : 'No incentive';
+      const prefix = (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) ? 'Blocked' : 'No incentive';
       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>${prefix}:</b> ${qualMsg}</span>`;
     } else if (earned === 0) {
       noIncMsg.style.display = 'block';
       let extra = (criteria && criteria.nextMonthAchvPct !== undefined) ? ` (Next month achv was ${incFmtPct(criteria.nextMonthAchvPct)})` : '';
       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive:</b> Achievement below minimum slab${extra}</span>`;
-    } else if (criteria && criteria.nextMonthAchvPct !== undefined) {
+    } else if (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) {
       noIncMsg.style.display = 'block';
-      noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)</span>`;
+      let s = [];
+      if (criteria.nextMonthAchvPct !== undefined) s.push(`Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)`);
+      if (criteria.pillarCurrentMonthAchvPct !== undefined) s.push(`Pillar achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (>= 90%)`);
+      noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> ${s.join(' and ')}</span>`;
     } else {
       noIncMsg.style.display = 'none';
     }
@@ -5113,7 +5121,15 @@ function calcHygiene() {
 }
 
 function calcAll() {
-  const m = calcSection('m', 'monthly');
+  const mNextTarget = window.buckets ? window.buckets.monthlyNext.t : 0;
+  const mNextActual = window.buckets ? window.buckets.monthlyNext.a : 0;
+  const mNextAchvPct = mNextTarget > 0 ? mNextActual / mNextTarget : 0;
+
+  const mPillarTarget = window.buckets ? window.buckets.monthlyPillarCurrent.t : 0;
+  const mPillarActual = window.buckets ? window.buckets.monthlyPillarCurrent.a : 0;
+  const mPillarAchvPct = mPillarTarget > 0 ? mPillarActual / mPillarTarget : 0;
+
+  const m = calcSection('m', 'monthly', { nextMonthAchvPct: mNextAchvPct, pillarCurrentMonthAchvPct: mPillarAchvPct });
   const b = calcSection('b', 'bimonthly');
   const a = calcSection('a', 'annual');
 
@@ -5386,6 +5402,8 @@ async function renderIncentive() {
   // 4. Aggregators
   const buckets = window.buckets = {
     monthly: { t: 0, a: 0, ly: 0 },
+    monthlyNext: { t: 0, a: 0 },
+    monthlyPillarCurrent: { t: 0, a: 0 },
     bimonthly: { t: 0, a: 0, ly: 0 },
     annual: { t: 0, a: 0, ly: 0 },
     pillar: { t: 0, a: 0, ly: 0 },
@@ -5394,6 +5412,7 @@ async function renderIncentive() {
     botyNext: { t: 0, a: 0 }
   };
   const nextMonth = (biCycle[1] % 12) + 1;
+  const strictlyNextMonth = (currentMonth % 12) + 1;
 
   const isBOTY = (brand) => {
     if (!brand) return false;
@@ -5402,16 +5421,18 @@ async function renderIncentive() {
   };
 
   const isPillarIncentiveBrand = (brand) => {
-    if (!brand) return false;
-    const b = brand.toUpperCase().trim();
-    return b === 'SERVIL JUNIOR' || b === 'SERVIL-LS JUNIOR';
+    return getBrandCategory(brand) === 'Pillar';
   };
 
   tgt.forEach(r => {
     const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
     buckets.annual.t += val;
-    if (m === currentMonth) buckets.monthly.t += val;
+    if (m === currentMonth) {
+      buckets.monthly.t += val;
+      if (isPillarIncentiveBrand(r.brand)) buckets.monthlyPillarCurrent.t += val;
+    }
+    if (m === strictlyNextMonth) buckets.monthlyNext.t += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.t += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.t += val;
@@ -5426,7 +5447,11 @@ async function renderIncentive() {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.a += val;
-    if (m === currentMonth) buckets.monthly.a += val;
+    if (m === currentMonth) {
+      buckets.monthly.a += val;
+      if (isPillarIncentiveBrand(r.brand)) buckets.monthlyPillarCurrent.a += val;
+    }
+    if (m === strictlyNextMonth) buckets.monthlyNext.a += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.a += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.a += val;
