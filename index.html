@@ -5041,21 +5041,21 @@ function calcSection(prefix, slabKey, criteria) {
   const slabPrefix = {monthly:'m',bimonthly:'b',annual:'a',pillar:'p',boty:'by'}[slabKey];
   renderSlabs(slabPrefix+'-slabs', slabs, achvPct, actual, target, blocked || !isQualifying, slabPrefix+'-no-inc');
 
-  if (criteria && criteria.nextMonthAchvPct !== undefined) {
-    const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
-    if (noIncMsg) {
-       noIncMsg.style.display = 'block';
-       if (!isQualifying) {
-         noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>Blocked:</b> ${qualMsg}</span>`;
-       } else {
-         noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)</span>`;
-       }
-    }
-  } else if (!isQualifying) {
-    const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
-    if (noIncMsg) {
-       noIncMsg.style.display = 'block';
-       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive:</b> ${qualMsg}</span>`;
+  const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
+  if (noIncMsg) {
+    if (!isQualifying) {
+      noIncMsg.style.display = 'block';
+      const prefix = (criteria && criteria.nextMonthAchvPct !== undefined) ? 'Blocked' : 'No incentive';
+      noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>${prefix}:</b> ${qualMsg}</span>`;
+    } else if (earned === 0) {
+      noIncMsg.style.display = 'block';
+      let extra = (criteria && criteria.nextMonthAchvPct !== undefined) ? ` (Next month achv was ${incFmtPct(criteria.nextMonthAchvPct)})` : '';
+      noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive:</b> Achievement below minimum slab${extra}</span>`;
+    } else if (criteria && criteria.nextMonthAchvPct !== undefined) {
+      noIncMsg.style.display = 'block';
+      noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)</span>`;
+    } else {
+      noIncMsg.style.display = 'none';
     }
   }
 
