@@ -4232,7 +4232,7 @@ const incentiveHTML = `\n<style>
     position: absolute;
     right: -20px; top: -20px;
     width: 120px; height: 120px;
-    background: rgba(245,166,35,0.inc-08);
+    background: rgba(245,166,35,0.08);
     border-radius: 50%;
   }
   .inc-total-banner::after {
@@ -4240,10 +4240,10 @@ const incentiveHTML = `\n<style>
     position: absolute;
     right: 20px; top: 20px;
     width: 60px; height: 60px;
-    background: rgba(245,166,35,0.inc-06);
+    background: rgba(245,166,35,0.06);
     border-radius: 50%;
   }
-  .inc-total-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.inc-5); letter-spacing: 1px; text-transform: uppercase; }
+  .inc-total-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; }
   .inc-total-amount {
     font-family: 'JetBrains Mono', monospace;
     font-size: 32px; font-weight: 600;
@@ -4296,6 +4296,7 @@ const incentiveHTML = `\n<style>
 
   .inc-section-title { font-size: 13px; font-weight: 600; color: var(--text); }
   .inc-section-period { font-size: 10px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+  .inc-total-banner .inc-section-period { color: rgba(255,255,255,0.5); }
   .inc-section-earned {
     text-align: right;
   }
