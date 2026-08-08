@@ -5127,12 +5127,6 @@ function calcAll() {
 
   const p = calcSection('p', 'pillar', { nextMonthAchvPct: pNextAchvPct });
   const by = calcSection('by', 'boty', { nextMonthAchvPct: byNextAchvPct });
-  
-  // Debug output
-  const pBanner = document.getElementById('p-total-disp');
-  if (pBanner) {
-    pBanner.innerHTML = fmt(p.earned) + `<div style="font-size:11px;color:var(--muted);margin-top:4px;">Next Month (June) Target: ${fmt(pNextTarget)}, Actual: ${fmt(pNextActual)}, Achv: ${incFmtPct(pNextAchvPct)}</div>`;
-  }
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
@@ -5249,7 +5243,7 @@ async function renderIncentive() {
     if (session.designation !== 'BE') {
       const opts = typeof buildScopeOptionsHTML === 'function' ? buildScopeOptionsHTML(beEmpId) : '';
       incBeNameDisplay.innerHTML = `<span style="opacity:0.7">Sales Performance Calculator</span><br/>
-      <select id="incBeNameSel" style="background: transparent; color: #FFF; border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font-size: 14px; outline: none; cursor: pointer; margin-top:4px; max-width: 250px;">
+      <select id="incBeNameSel" style="background: #0f172a; color: #FFF; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 2px 4px; font-size: 14px; outline: none; cursor: pointer; margin-top:4px; max-width: 250px;">
         ${opts}
       </select>`;
       setTimeout(() => {
@@ -5343,10 +5337,16 @@ async function renderIncentive() {
     return allRows;
   }
 
+  const fetchMonths = [...ytdMonths];
+  if (biCycle && biCycle.length === 2) {
+    const nxtM = (biCycle[1] % 12) + 1;
+    if (!fetchMonths.includes(nxtM)) fetchMonths.push(nxtM);
+  }
+
   const [tgt, ach, lastYear] = await Promise.all([
-    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, ytdMonths),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, ytdMonths),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, ytdMonths)
+    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, fetchMonths),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, fetchMonths),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, fetchMonths)
   ]);
 
   // Determine Target Multiplier for actuals
