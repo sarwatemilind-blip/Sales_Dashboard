@@ -5127,6 +5127,12 @@ function calcAll() {
 
   const p = calcSection('p', 'pillar', { nextMonthAchvPct: pNextAchvPct });
   const by = calcSection('by', 'boty', { nextMonthAchvPct: byNextAchvPct });
+  
+  // Debug output
+  const pBanner = document.getElementById('p-total-disp');
+  if (pBanner) {
+    pBanner.innerHTML = fmt(p.earned) + `<div style="font-size:11px;color:var(--muted);margin-top:4px;">Next Month (June) Target: ${fmt(pNextTarget)}, Actual: ${fmt(pNextActual)}, Achv: ${incFmtPct(pNextAchvPct)}</div>`;
+  }
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
