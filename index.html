@@ -149,7 +149,10 @@
   @media (max-width: 900px){
     .login-grid{grid-template-columns:1fr;}
   }
-</style>
+
+
+
+  </style>
 </head>
 <body>
 
@@ -5266,7 +5269,7 @@ async function renderIncentive() {
   const incMonthDisplay = document.getElementById('inc-month-display');
   if (incMonthDisplay) {
     const opts = FY_MONTHS.map(m => `<option value="${m.n}" ${m.n===currentMonth?'selected':''}>${m.label}</option>`).join('');
-    incMonthDisplay.innerHTML = `<select id="incMonthSel" style="background: transparent; color: var(--gold-light); border: 1px solid var(--gold-light); border-radius: 4px; padding: 2px 4px; font-size: 11px; outline: none; cursor: pointer;">${opts}</select>`;
+    incMonthDisplay.innerHTML = `<style>#incMonthSel option { background: #0f172a; color: #fff; }</style><select id="incMonthSel" style="background: #0f172a; color: var(--gold-light); border: 1px solid var(--gold-light); border-radius: 4px; padding: 2px 4px; font-size: 11px; outline: none; cursor: pointer;">${opts}</select>`;
     
     setTimeout(() => {
       const ms = document.getElementById('incMonthSel');
@@ -5317,12 +5320,20 @@ async function renderIncentive() {
     
     const queries = [];
     if (tableName === 'targets') {
-      const q1 = sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal).in(monthCol, monthsVal.filter(m => m <= 9));
-      queries.push(q1);
-      const q2 = sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal + 1).in(monthCol, monthsVal.filter(m => m > 9));
-      queries.push(q2);
+      const m1 = monthsVal.filter(m => m <= 9);
+      if (m1.length > 0) {
+        const q1 = sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal).in(monthCol, m1);
+        queries.push(q1);
+      }
+      const m2 = monthsVal.filter(m => m > 9);
+      if (m2.length > 0) {
+        const q2 = sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal + 1).in(monthCol, m2);
+        queries.push(q2);
+      }
     } else {
-      queries.push(sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal).in(monthCol, monthsVal));
+      if (monthsVal.length > 0) {
+        queries.push(sb.from(tableName).select('*').eq(filterCol, beEmpId).eq(yearCol, yVal).in(monthCol, monthsVal));
+      }
     }
 
     for (let q of queries) {
