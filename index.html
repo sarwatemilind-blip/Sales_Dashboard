@@ -5129,8 +5129,16 @@ function calcAll() {
   const mPillarActual = window.buckets ? window.buckets.monthlyPillarCurrent.a : 0;
   const mPillarAchvPct = mPillarTarget > 0 ? mPillarActual / mPillarTarget : 0;
 
+  const bNextTarget = window.buckets ? window.buckets.bimonthlyNext.t : 0;
+  const bNextActual = window.buckets ? window.buckets.bimonthlyNext.a : 0;
+  const bNextAchvPct = bNextTarget > 0 ? bNextActual / bNextTarget : 0;
+
+  const bPillarTarget = window.buckets ? window.buckets.bimonthlyPillarCurrent.t : 0;
+  const bPillarActual = window.buckets ? window.buckets.bimonthlyPillarCurrent.a : 0;
+  const bPillarAchvPct = bPillarTarget > 0 ? bPillarActual / bPillarTarget : 0;
+
   const m = calcSection('m', 'monthly', { nextMonthAchvPct: mNextAchvPct, pillarCurrentMonthAchvPct: mPillarAchvPct });
-  const b = calcSection('b', 'bimonthly');
+  const b = calcSection('b', 'bimonthly', { nextMonthAchvPct: bNextAchvPct, pillarCurrentMonthAchvPct: bPillarAchvPct });
   const a = calcSection('a', 'annual');
 
   const pNextTarget = window.buckets ? window.buckets.pillarNext.t : 0;
@@ -5401,6 +5409,8 @@ async function renderIncentive() {
     monthlyNext: { t: 0, a: 0 },
     monthlyPillarCurrent: { t: 0, a: 0 },
     bimonthly: { t: 0, a: 0, ly: 0 },
+    bimonthlyNext: { t: 0, a: 0 },
+    bimonthlyPillarCurrent: { t: 0, a: 0 },
     annual: { t: 0, a: 0, ly: 0 },
     pillar: { t: 0, a: 0, ly: 0 },
     boty: { t: 0, a: 0, ly: 0 },
@@ -5437,9 +5447,11 @@ async function renderIncentive() {
     if (m === strictlyNextMonth) buckets.monthlyNext.t += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.t += val;
+      if (is12PillarBrands(r.brand)) buckets.bimonthlyPillarCurrent.t += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.t += val;
       if (isBOTY(r.brand)) buckets.boty.t += val;
     } else if (m === nextMonth) {
+      buckets.bimonthlyNext.t += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillarNext.t += val;
       if (isBOTY(r.brand)) buckets.botyNext.t += val;
     }
@@ -5456,9 +5468,11 @@ async function renderIncentive() {
     if (m === strictlyNextMonth) buckets.monthlyNext.a += val;
     if (biCycle.includes(m)) {
       buckets.bimonthly.a += val;
+      if (is12PillarBrands(r.brand)) buckets.bimonthlyPillarCurrent.a += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillar.a += val;
       if (isBOTY(r.brand)) buckets.boty.a += val;
     } else if (m === nextMonth) {
+      buckets.bimonthlyNext.a += val;
       if (isPillarIncentiveBrand(r.brand)) buckets.pillarNext.a += val;
       if (isBOTY(r.brand)) buckets.botyNext.a += val;
     }
