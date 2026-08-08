@@ -327,7 +327,7 @@ function renderShell(tab){
       <div class="brand-lockup">
         <img src="adonis-logo.png" alt="Adonis logo" class="brand-logo" />
         <div>
-        <div style="font-weight:700;">Adonis Field Force — Sales Dashboard</div>
+        <div style="font-weight:700;font-size:18px;margin-bottom:2px;letter-spacing:0.5px;">Adonis Incentives (Live Fix)</div>
         <div class="who">Logged in as <b>${session.name || session.emp_id}</b> · ${session.designation} ${headerHq ? "· " + headerHq : ""}</div>
         </div>
       </div>
@@ -1538,7 +1538,7 @@ async function loadDashboardData(){
     Others: { targetVal: 0, achVal: 0, lastYearVal: 0 }
   };
 
-  tgt.forEach(r => {
+  mark("tgt foreach"); tgt.forEach(r => {
     const cat = getBrandCategory(r.brand);
     categorySummary[cat].targetVal += (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
   });
@@ -5203,7 +5203,7 @@ function toggleSection(header) {
 
 async function renderIncentive() {
   const main = document.getElementById('main');
-  main.innerHTML = incentiveHTML;
+  mark("setting HTML"); main.innerHTML = incentiveHTML;
 
   // 1. Must be viewing a specific BE
   let isBE = false;
@@ -5239,7 +5239,7 @@ async function renderIncentive() {
     }, 0);
     return;
   }
-  const beEmpId = selectedEmpId || session.emp_id;
+  const beEmpId = ((selectedEmpId && selectedEmpId !== 'overall') ? selectedEmpId : session.emp_id).toUpperCase();
   const beEmp = typeof allDownlineEmployees !== 'undefined' ? allDownlineEmployees.find(e => e.emp_id === beEmpId) : null;
   const beName = beEmp ? (beEmp.name || beEmp.emp_id) : (session.name || session.emp_id);
   const incBeNameDisplay = document.getElementById('inc-be-name-display');
@@ -5311,7 +5311,7 @@ async function renderIncentive() {
     if (month === 11 || month === 12) return [11, 12];
     return [];
   }
-  const biCycle = getBimonthlyCycle(currentMonth);
+  mark("biCycle"); const biCycle = getBimonthlyCycle(currentMonth);
 
   // 3. Fetch data for YTD
   async function fetchAllRows(tableName, filterCol, yearCol, monthCol, yVal, monthsVal) {
@@ -5340,7 +5340,13 @@ async function renderIncentive() {
       let from = 0;
       while (true) {
         const { data, error } = await q.order(orderCol, { ascending: true }).range(from, from + 999);
-        if (error || !data) break;
+        if (error || !data) {
+          const errDiv = document.createElement('div');
+          errDiv.style.cssText = 'position:fixed;top:50px;left:50px;background:red;color:white;padding:20px;z-index:9999;font-size:14px;max-width:80%;word-wrap:break-word;';
+          errDiv.innerText = 'Supabase Fetch Error: ' + (error ? JSON.stringify(error) : 'No data');
+          document.body.appendChild(errDiv);
+          break;
+        }
         allRows.push(...data);
         if (data.length < 1000) break;
         from += 1000;
@@ -5349,20 +5355,26 @@ async function renderIncentive() {
     return allRows;
   }
 
-  const fetchMonths = [...ytdMonths];
+  mark("fetchMonths"); const fetchMonths = [...ytdMonths];
   if (biCycle && biCycle.length === 2) {
     const nxtM = (biCycle[1] % 12) + 1;
     if (!fetchMonths.includes(nxtM)) fetchMonths.push(nxtM);
   }
 
-  const [tgt, ach, lastYear] = await Promise.all([
-    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, fetchMonths),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, fetchMonths),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, fetchMonths)
-  ]);
+  mark("pre Promise.all"); let tgt = [], ach = [], lastYear = [];
+  try {
+    const res = await Promise.all([
+      fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, fetchMonths),
+      fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, fetchMonths),
+      fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, fetchMonths)
+    ]);
+    tgt = res[0]; ach = res[1]; lastYear = res[2];
+  } catch(e) {
+    document.body.innerHTML += `<div style="background:red;color:white;position:fixed;top:0;left:0;padding:20px;z-index:9999;">ERROR in fetchAllRows: ${e.message}</div>`;
+  }
 
   // Determine Target Multiplier for actuals
-  const targetMultiplier = await (async () => {
+  mark("post Promise.all"); const targetMultiplier = await (async () => {
     let mul = 1.0;
     try {
       const { data } = await sb.from('users').select('designation').eq('emp_id', beEmpId).single();
@@ -5410,7 +5422,7 @@ async function renderIncentive() {
     }
   });
 
-  ach.forEach(r => {
+  mark("ach foreach"); ach.forEach(r => {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.a += val;
@@ -5438,7 +5450,7 @@ async function renderIncentive() {
   });
 
   // 5. Hydrate UI
-  const setVal = (id, val) => {
+  mark("setVal"); const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) { el.value = Math.round(val); el.readOnly = true; el.style.backgroundColor = '#f4f6fb'; }
   };
@@ -5446,6 +5458,13 @@ async function renderIncentive() {
   // Removed duplicate const buckets
 
   setVal('m-target', buckets.monthly.t);
+  
+  // Debug element
+  const dbg = document.createElement('div');
+  dbg.style.cssText = 'position:fixed;bottom:10px;right:10px;background:#000;color:#0f0;padding:10px;z-index:9999;font-size:12px;font-family:monospace;max-width:300px;word-wrap:break-word;';
+  dbg.innerHTML = `fetchM: ${fetchMonths.join(',')}<br>tgtLen: ${tgt.length}<br>achLen: ${ach.length}<br>lyLen: ${lastYear.length}<br>m-t: ${buckets.monthly.t}`;
+  document.body.appendChild(dbg);
+
   setVal('m-actual', buckets.monthly.a);
   setVal('m-ly', buckets.monthly.ly);
 
