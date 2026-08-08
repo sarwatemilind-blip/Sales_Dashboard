@@ -4988,12 +4988,9 @@ function calcSection(prefix, slabKey, criteria) {
   let qualMsg = '';
   let isQualifying = true;
   if (criteria && !blocked) {
-    if (criteria.bimonthlyAchvPct < 0.90) {
+    if (criteria.nextMonthAchvPct !== undefined && criteria.nextMonthAchvPct < 0.90) {
       isQualifying = false;
-      qualMsg = 'Blocked - Bimonthly < 90%';
-    } else if (criteria.nextMonthAchvPct < 0.90) {
-      isQualifying = false;
-      qualMsg = 'Blocked - Next Month < 90%';
+      qualMsg = `Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (< 90%)`;
     }
   }
   if (prefix === 'a' && currentMonth < 12) {
@@ -5040,11 +5037,21 @@ function calcSection(prefix, slabKey, criteria) {
   const slabPrefix = {monthly:'m',bimonthly:'b',annual:'a',pillar:'p',boty:'by'}[slabKey];
   renderSlabs(slabPrefix+'-slabs', slabs, achvPct, actual, target, blocked || !isQualifying, slabPrefix+'-no-inc');
 
-  if (!isQualifying) {
+  if (criteria && criteria.nextMonthAchvPct !== undefined) {
     const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
     if (noIncMsg) {
        noIncMsg.style.display = 'block';
-       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> - ${qualMsg}</span>`;
+       if (!isQualifying) {
+         noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>Blocked:</b> ${qualMsg}</span>`;
+       } else {
+         noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)</span>`;
+       }
+    }
+  } else if (!isQualifying) {
+    const noIncMsg = document.getElementById(slabPrefix+'-no-inc');
+    if (noIncMsg) {
+       noIncMsg.style.display = 'block';
+       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive:</b> ${qualMsg}</span>`;
     }
   }
 
@@ -5118,8 +5125,8 @@ function calcAll() {
   const byNextActual = window.buckets ? window.buckets.botyNext.a : 0;
   const byNextAchvPct = byNextTarget > 0 ? byNextActual / byNextTarget : 0;
 
-  const p = calcSection('p', 'pillar', { bimonthlyAchvPct: bAchvPct, nextMonthAchvPct: pNextAchvPct });
-  const by = calcSection('by', 'boty', { bimonthlyAchvPct: bAchvPct, nextMonthAchvPct: byNextAchvPct });
+  const p = calcSection('p', 'pillar', { nextMonthAchvPct: pNextAchvPct });
+  const by = calcSection('by', 'boty', { nextMonthAchvPct: byNextAchvPct });
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
