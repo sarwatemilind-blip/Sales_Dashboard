@@ -5388,6 +5388,8 @@ async function renderIncentive() {
   }
 
   const fetchMonths = [...ytdMonths];
+  const nxtMMonthly = (currentMonth % 12) + 1;
+  if (!fetchMonths.includes(nxtMMonthly)) fetchMonths.push(nxtMMonthly);
   if (biCycle && biCycle.length === 2) {
     const nxtM = (biCycle[1] % 12) + 1;
     if (!fetchMonths.includes(nxtM)) fetchMonths.push(nxtM);
