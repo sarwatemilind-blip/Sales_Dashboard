@@ -1502,11 +1502,11 @@ async function loadDashboardData(){
   const mtdRatio = elapsedDays / daysInMonth;
 
   let targetMultiplier = 1.0;
-  let filteredAchAttr = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
-  let filteredLastYearAttr = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  let filteredAchAttr = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
+  let filteredLastYearAttr = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
   
-  let filteredAch = ach.filter(r => !(r.brand || '').endsWith('(FREE)'));
-  let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  let filteredAch = ach.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
+  let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
 
   if (currentView === 'mtd') {
     filteredAchAttr = filteredAchAttr.filter(r => !r.bill_date || r.bill_date <= todayStr);
@@ -3075,73 +3075,48 @@ async function handleExpiryUpload(e) {
         }
       }
       
-      status.textContent = "Fetching Stockist Mapping...";
-      const { data: stockistMap, error: mapErr } = await sb.from('stockist_mapping').select('stockist_code, be_emp_id_1, be_emp_id_2, be_emp_id_3');
-      if (mapErr) throw mapErr;
-      
-      const mapDict = {};
-      stockistMap.forEach(s => {
-        if (s.stockist_code) {
-          const bes = [];
-          if (s.be_emp_id_1) bes.push(s.be_emp_id_1);
-          if (s.be_emp_id_2) bes.push(s.be_emp_id_2);
-          if (s.be_emp_id_3) bes.push(s.be_emp_id_3);
-          if (bes.length > 0) {
-            mapDict[String(s.stockist_code).trim().toUpperCase()] = bes;
-          }
-        }
-      });
-      
-      status.textContent = "Aggregating Expiry by BE...";
-      const beAgg = {};
-      for (const sCode in stockistAgg) {
-        const bes = mapDict[sCode.toUpperCase()];
-        if (bes && bes.length > 0) {
-          const splitVal = stockistAgg[sCode] / bes.length;
-          bes.forEach(be => {
-            beAgg[be] = (beAgg[be] || 0) + splitVal;
-          });
-        }
-      }
-      
       const out = [];
-      const timestamp = new Date().toISOString();
-      for (const be in beAgg) {
+      const pYear = parseInt(document.getElementById('uploadYear').value, 10);
+      const pMonth = parseInt(document.getElementById('uploadMonth').value, 10);
+      
+      for (const sCode in stockistAgg) {
         out.push({
           period_year: pYear,
           period_month: pMonth,
-          stockist_code: 'EXPIRY',
+          stockist_code: sCode,
           hq_code: 'EXP',
           hq_name: 'EXPIRY',
           brand: 'HYGIENE_EXPIRY',
           canonical_product_code: 'EXPIRY',
-          be_emp_id: be,
           quantity: 1,
-          amount: beAgg[be],
-          uploaded_at: timestamp,
+          amount: stockistAgg[sCode],
           uploaded_by: session.emp_id,
           bill_date: `${pYear}-01-01`
         });
       }
       
       if (out.length === 0) {
-        throw new Error("No valid data found to upload. Please check the Excel file format and mappings.");
+        status.innerHTML = "No valid expiry data found.";
+        return;
       }
       
-      status.textContent = `Deleting existing Expiry data for Month ${pMonth}, Year ${pYear}...`;
-      await sb.from('sales_attributed')
+      progBar.style.width = '70%';
+      status.textContent = "Clearing existing expiry for selected period...";
+      
+      await sb.from('sales')
         .delete()
         .eq('period_year', pYear)
         .eq('period_month', pMonth)
         .eq('brand', 'HYGIENE_EXPIRY');
         
-      status.textContent = `Uploading ${out.length} Expiry rows to Supabase...`;
+      status.textContent = "Uploading expiry data...";
       
-      // Upsert in chunks of 500
-      for (let i = 0; i < out.length; i += 500) {
-        const chunk = out.slice(i, i + 500);
-        const { error } = await sb.from('sales_attributed').upsert(chunk);
-        if (error) throw error;
+      const batchSize = 500;
+      for (let i = 0; i < out.length; i += batchSize) {
+        const batch = out.slice(i, i + batchSize);
+        const { error } = await sb.from('sales').insert(batch);
+        if (error) { status.textContent = "Error: " + error.message; return; }
+        progBar.style.width = Math.round(70 + ((i+batch.length)/out.length)*30) + "%";
       }
       
       status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Uploaded Expiry data for ${out.length} BEs.`;
@@ -5252,7 +5227,7 @@ function calcHygiene() {
   const sales = parseFloat(document.getElementById('h-sales').value) || 0;
   
   // Auto-fetch expiry from buckets
-  const autoExpiry = (window.buckets && window.buckets.hygieneExpiry) ? window.buckets.hygieneExpiry.a : 0;
+  const autoExpiry = (window.buckets && window.buckets.hygieneExpiry) ? Math.abs(window.buckets.hygieneExpiry.a) : 0;
   
   const expiryEl = document.getElementById('h-expiry');
   if (expiryEl) {
@@ -5263,7 +5238,7 @@ function calcHygiene() {
   }
   
   const expiryInput = expiryEl ? expiryEl.value : String(autoExpiry);
-  const expiry = parseFloat(expiryInput) || 0;
+  const expiry = Math.abs(parseFloat(expiryInput) || 0);
   // If autoExpiry > 0, it means it's available. If 0, it might be 0, but we need to ensure it was uploaded.
   // We'll assume if it was uploaded and is 0, they can still qualify. Wait, if it's 0, how do we know it was uploaded vs missing?
   // We'll consider it entered if there's any data for the period.
@@ -5304,6 +5279,8 @@ function calcHygiene() {
   if (!isQualifying && noIncMsg) {
     noIncMsg.style.display = 'block';
     noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> - ${qualMsg}</span>`;
+  } else if (noIncMsg) {
+    noIncMsg.style.display = 'none';
   }
 
   document.getElementById('h-total-disp').textContent = fmt(earned);
@@ -5660,8 +5637,10 @@ async function renderIncentive() {
   tgt.forEach(r => {
     const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
-    buckets.annual.t += val;
-    if (is12PillarBrands(r.brand)) buckets.annualPillar.t += val;
+    if (m <= currentMonth) {
+      buckets.annual.t += val;
+      if (is12PillarBrands(r.brand)) buckets.annualPillar.t += val;
+    }
     if (m === currentMonth) {
       buckets.monthly.t += val;
       if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.t += val;
@@ -5692,8 +5671,10 @@ async function renderIncentive() {
       buckets.hygieneExpiry.a += val;
       return; // Do not add to regular sales buckets
     }
-    buckets.annual.a += val;
-    if (is12PillarBrands(r.brand)) buckets.annualPillar.a += val;
+    if (m <= currentMonth) {
+      buckets.annual.a += val;
+      if (is12PillarBrands(r.brand)) buckets.annualPillar.a += val;
+    }
     if (m === currentMonth) {
       buckets.monthly.a += val;
       if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.a += val;
