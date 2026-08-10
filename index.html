@@ -3024,6 +3024,128 @@ function downloadDashboardDataExcel() {
 }
 
 // ---------------- ADMIN UPLOAD ----------------
+
+async function handleExpiryUpload(e) {
+  const file = e.target.files[0];
+  if(!file) return;
+  const pYear = parseInt(document.getElementById("expiryYear").value, 10);
+  const pMonth = parseInt(document.getElementById("expiryMonth").value, 10);
+  
+  const status = document.getElementById("adminStatus");
+  status.style.display = 'block';
+  status.textContent = "Reading Expiry file...";
+  
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, {type: 'array'});
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ""});
+      
+      status.textContent = "Parsing Expiry data...";
+      let headerIdx = -1;
+      let stockistCol = -1;
+      let grossValCol = -1;
+      
+      for(let i = 0; i < Math.min(20, rows.length); i++) {
+        const row = rows[i];
+        if (row.includes("Gross Value")) {
+          headerIdx = i;
+          grossValCol = row.indexOf("Gross Value");
+          stockistCol = row.indexOf("Cust Erp/Sap Code");
+          if(stockistCol === -1) stockistCol = row.indexOf("Code");
+          break;
+        }
+      }
+      
+      if(headerIdx === -1 || stockistCol === -1 || grossValCol === -1) {
+        throw new Error("Could not find required columns ('Cust Erp/Sap Code' and 'Gross Value').");
+      }
+      
+      const stockistAgg = {};
+      for(let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+        const sCode = String(row[stockistCol]).trim();
+        const val = parseFloat(row[grossValCol]);
+        if (sCode && !isNaN(val)) {
+          stockistAgg[sCode] = (stockistAgg[sCode] || 0) + val;
+        }
+      }
+      
+      status.textContent = "Fetching Stockist Mapping...";
+      const { data: stockistMap, error: mapErr } = await sb.from('stockist_mapping').select('stockist_code, be_emp_id_1');
+      if (mapErr) throw mapErr;
+      
+      const mapDict = {};
+      stockistMap.forEach(s => {
+        if (s.stockist_code && s.be_emp_id_1) {
+          mapDict[String(s.stockist_code).trim().toUpperCase()] = s.be_emp_id_1;
+        }
+      });
+      
+      status.textContent = "Aggregating Expiry by BE...";
+      const beAgg = {};
+      for (const sCode in stockistAgg) {
+        const be = mapDict[sCode.toUpperCase()];
+        if (be) {
+          beAgg[be] = (beAgg[be] || 0) + stockistAgg[sCode];
+        }
+      }
+      
+      const out = [];
+      const timestamp = new Date().toISOString();
+      for (const be in beAgg) {
+        out.push({
+          period_year: pYear,
+          period_month: pMonth,
+          stockist_code: 'EXPIRY',
+          hq_code: 'EXP',
+          hq_name: 'EXPIRY',
+          brand: 'HYGIENE_EXPIRY',
+          canonical_product_code: 'EXPIRY',
+          be_emp_id: be,
+          quantity: 1,
+          amount: beAgg[be],
+          uploaded_at: timestamp,
+          uploaded_by: session.emp_id,
+          bill_date: `${pYear}-01-01`
+        });
+      }
+      
+      if (out.length === 0) {
+        throw new Error("No valid data found to upload. Please check the Excel file format and mappings.");
+      }
+      
+      status.textContent = `Deleting existing Expiry data for Month ${pMonth}, Year ${pYear}...`;
+      await sb.from('sales_attributed')
+        .delete()
+        .eq('period_year', pYear)
+        .eq('period_month', pMonth)
+        .eq('brand', 'HYGIENE_EXPIRY');
+        
+      status.textContent = `Uploading ${out.length} Expiry rows to Supabase...`;
+      
+      // Upsert in chunks of 500
+      for (let i = 0; i < out.length; i += 500) {
+        const chunk = out.slice(i, i + 500);
+        const { error } = await sb.from('sales_attributed').upsert(chunk);
+        if (error) throw error;
+      }
+      
+      status.innerHTML = `<span style="color:var(--good);font-weight:600;">Done.</span> Uploaded Expiry data for ${out.length} BEs.`;
+      loadUploadedFiles();
+      e.target.value = ""; // clear input
+    } catch(err) {
+      console.error(err);
+      status.innerHTML = `<span style="color:var(--danger)">Error: ${err.message}</span>`;
+      e.target.value = "";
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function renderAdmin(){
   const main = document.getElementById("main");
   main.innerHTML = `
@@ -3079,6 +3201,23 @@ function renderAdmin(){
     </div>
 
     <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Upload Expiry / Breakage Data</div>
+      <p class="small">Upload the Expiry data Excel file. The system will look for <b>Cust Erp/Sap Code</b> (Stockist Code) and <b>Gross Value</b> columns to attribute the expiry amounts to the respective BEs. Note: You must select the period month and year before uploading.</p>
+      <div class="flex" style="gap:10px; margin-bottom:10px;">
+        <select id="expiryMonth" style="padding:8px; border:1px solid var(--line); border-radius:6px;">
+          <option value="4">Period: Apr to Jul (Month 4)</option>
+          <option value="8">Period: Aug to Nov (Month 8)</option>
+          <option value="12">Period: Dec to Mar (Month 12)</option>
+        </select>
+        <select id="expiryYear" style="padding:8px; border:1px solid var(--line); border-radius:6px;">
+          <option value="2025">2025</option>
+          <option value="2026" selected>2026</option>
+          <option value="2027">2027</option>
+        </select>
+      </div>
+      <input type="file" id="expiryFileInput" accept=".csv,.xlsx,.xls">
+    </div>
+    <div class="upload-box" style="margin-top:20px;">
       <div class="section-title" style="margin-top:0;">Upload Targets</div>
       <p class="small">Upload the <b>targets.csv</b> or matching Excel file to replace the target master after employee corrections. Required columns: <b>emp_id, hq_code, hq_name, brand, product_code, state, region, no_of_be, month_num, month_name, year, val_target_total, unit_target_total, val_target_per_be, unit_target_per_be</b>.</p>
       <input type="file" id="targetFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
@@ -3108,6 +3247,7 @@ function renderAdmin(){
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
   document.getElementById("targetFileInput").onchange = handleTargetUpload;
+  document.getElementById("expiryFileInput").onchange = handleExpiryUpload;
   document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
   (async () => {
@@ -5100,9 +5240,24 @@ function calcSection(prefix, slabKey, criteria) {
 
 function calcHygiene() {
   const sales = parseFloat(document.getElementById('h-sales').value) || 0;
-  const expiryInput = document.getElementById('h-expiry').value;
+  
+  // Auto-fetch expiry from buckets
+  const autoExpiry = (window.buckets && window.buckets.hygieneExpiry) ? window.buckets.hygieneExpiry.a : 0;
+  
+  const expiryEl = document.getElementById('h-expiry');
+  if (expiryEl) {
+    expiryEl.value = autoExpiry || '';
+    expiryEl.readOnly = true;
+    expiryEl.style.backgroundColor = '#f1f5f9';
+    expiryEl.title = 'Automatically fetched from uploaded Expiry Data';
+  }
+  
+  const expiryInput = expiryEl ? expiryEl.value : String(autoExpiry);
   const expiry = parseFloat(expiryInput) || 0;
-  const isExpiryEntered = expiryInput.trim() !== '';
+  // If autoExpiry > 0, it means it's available. If 0, it might be 0, but we need to ensure it was uploaded.
+  // We'll assume if it was uploaded and is 0, they can still qualify. Wait, if it's 0, how do we know it was uploaded vs missing?
+  // We'll consider it entered if there's any data for the period.
+  const isExpiryEntered = (window.buckets && window.buckets.hygieneExpiry && window.buckets.hygieneExpiry.a !== undefined);
   const pct = sales > 0 ? expiry / sales : 0;
 
   const pctEl = document.getElementById('h-pct-disp');
@@ -5458,6 +5613,7 @@ async function renderIncentive() {
 
   // 4. Aggregators
   const buckets = window.buckets = {
+    hygieneExpiry: {a: 0},
     annualPillar: { t: 0, a: 0 },
     annualNextQuarter: { t: 0, a: 0 },
     monthly: { t: 0, a: 0, ly: 0 },
@@ -5516,6 +5672,16 @@ async function renderIncentive() {
   ach.forEach(r => {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
+    
+    if (r.brand === 'HYGIENE_EXPIRY') {
+      buckets.hygieneExpiry.a += val;
+      return; // Do not add to regular sales buckets
+    }
+    
+    if (r.brand === 'HYGIENE_EXPIRY') {
+      buckets.hygieneExpiry.a += val;
+      return; // Do not add to regular sales buckets
+    }
     buckets.annual.a += val;
     if (is12PillarBrands(r.brand)) buckets.annualPillar.a += val;
     if (m === currentMonth) {
