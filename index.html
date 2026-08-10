@@ -3067,7 +3067,8 @@ async function handleExpiryUpload(e) {
       for(let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
-        const sCode = String(row[stockistCol]).trim();
+        const rawSCode = row[stockistCol] || (typeof altStockistCol !== 'undefined' && altStockistCol !== -1 ? row[altStockistCol] : "");
+        const sCode = String(rawSCode).trim();
         const val = parseFloat(row[grossValCol]);
         if (sCode && !isNaN(val)) {
           stockistAgg[sCode] = (stockistAgg[sCode] || 0) + val;
