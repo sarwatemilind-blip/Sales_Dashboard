@@ -3075,22 +3075,31 @@ async function handleExpiryUpload(e) {
       }
       
       status.textContent = "Fetching Stockist Mapping...";
-      const { data: stockistMap, error: mapErr } = await sb.from('stockist_mapping').select('stockist_code, be_emp_id_1');
+      const { data: stockistMap, error: mapErr } = await sb.from('stockist_mapping').select('stockist_code, be_emp_id_1, be_emp_id_2, be_emp_id_3');
       if (mapErr) throw mapErr;
       
       const mapDict = {};
       stockistMap.forEach(s => {
-        if (s.stockist_code && s.be_emp_id_1) {
-          mapDict[String(s.stockist_code).trim().toUpperCase()] = s.be_emp_id_1;
+        if (s.stockist_code) {
+          const bes = [];
+          if (s.be_emp_id_1) bes.push(s.be_emp_id_1);
+          if (s.be_emp_id_2) bes.push(s.be_emp_id_2);
+          if (s.be_emp_id_3) bes.push(s.be_emp_id_3);
+          if (bes.length > 0) {
+            mapDict[String(s.stockist_code).trim().toUpperCase()] = bes;
+          }
         }
       });
       
       status.textContent = "Aggregating Expiry by BE...";
       const beAgg = {};
       for (const sCode in stockistAgg) {
-        const be = mapDict[sCode.toUpperCase()];
-        if (be) {
-          beAgg[be] = (beAgg[be] || 0) + stockistAgg[sCode];
+        const bes = mapDict[sCode.toUpperCase()];
+        if (bes && bes.length > 0) {
+          const splitVal = stockistAgg[sCode] / bes.length;
+          bes.forEach(be => {
+            beAgg[be] = (beAgg[be] || 0) + splitVal;
+          });
         }
       }
       
