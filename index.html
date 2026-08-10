@@ -5013,6 +5013,16 @@ function calcSection(prefix, slabKey, criteria) {
       const pMsg = `Pillar brands achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (< 90%)`;
       qualMsg = qualMsg ? qualMsg + ' and ' + pMsg : pMsg;
     }
+    if (criteria.pillarAnnualAchvPct !== undefined && criteria.pillarAnnualAchvPct < 0.90) {
+      isQualifying = false;
+      const pMsg = `Pillar yearly achv is ${incFmtPct(criteria.pillarAnnualAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + pMsg : pMsg;
+    }
+    if (criteria.nextQuarterAchvPct !== undefined && criteria.nextQuarterAchvPct < 0.90) {
+      isQualifying = false;
+      const mMsg = `Next quarter achv is ${incFmtPct(criteria.nextQuarterAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + mMsg : mMsg;
+    }
   }
   if (prefix === 'a' && currentMonth < 12) {
     isQualifying = false;
@@ -5074,6 +5084,8 @@ function calcSection(prefix, slabKey, criteria) {
       if (criteria.nextMonthAchvPct !== undefined) s.push(`Next month overall achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)`);
       if (criteria.nextMonthBrandAchvPct !== undefined) s.push(`Next month brand achv is ${incFmtPct(criteria.nextMonthBrandAchvPct)} (>= 90%)`);
       if (criteria.pillarCurrentMonthAchvPct !== undefined) s.push(`Pillar achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (>= 90%)`);
+      if (criteria.pillarAnnualAchvPct !== undefined) s.push(`Pillar yearly achv is ${incFmtPct(criteria.pillarAnnualAchvPct)} (>= 90%)`);
+      if (criteria.nextQuarterAchvPct !== undefined) s.push(`Next quarter achv is ${incFmtPct(criteria.nextQuarterAchvPct)} (>= 90%)`);
       noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> ${s.join(' and ')}</span>`;
     } else {
       noIncMsg.style.display = 'none';
@@ -5152,7 +5164,15 @@ function calcAll() {
 
   const m = calcSection('m', 'monthly', { nextMonthAchvPct: mNextAchvPct, pillarCurrentMonthAchvPct: mPillarAchvPct });
   const b = calcSection('b', 'bimonthly', { nextMonthAchvPct: bNextAchvPct, pillarCurrentMonthAchvPct: bPillarAchvPct });
-  const a = calcSection('a', 'annual');
+  const aPillarTarget = window.buckets ? window.buckets.annualPillar.t : 0;
+  const aPillarActual = window.buckets ? window.buckets.annualPillar.a : 0;
+  const aPillarAchvPct = aPillarTarget > 0 ? aPillarActual / aPillarTarget : 0;
+
+  const aNextQuarterTarget = window.buckets ? window.buckets.annualNextQuarter.t : 0;
+  const aNextQuarterActual = window.buckets ? window.buckets.annualNextQuarter.a : 0;
+  const aNextQuarterAchvPct = aNextQuarterTarget > 0 ? aNextQuarterActual / aNextQuarterTarget : 0;
+
+  const a = calcSection('a', 'annual', { pillarAnnualAchvPct: aPillarAchvPct, nextQuarterAchvPct: aNextQuarterAchvPct });
 
   const pNextTarget = window.buckets ? window.buckets.pillarNext.t : 0;
   const pNextActual = window.buckets ? window.buckets.pillarNext.a : 0;
@@ -5404,6 +5424,24 @@ async function renderIncentive() {
       fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, fetchMonths)
     ]);
     tgt = res[0]; ach = res[1]; lastYear = res[2];
+    
+    if (currentMonth === 12) {
+      const nqRes = await Promise.all([
+        fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear + 1, [1, 2, 3]),
+        fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear + 1, [1, 2, 3])
+      ]);
+      const nqTgt = nqRes[0];
+      const nqAch = nqRes[1];
+      
+      nqTgt.forEach(r => {
+        const val = (parseFloat(r.val_target_per_be) || 0) * 100000;
+        buckets.annualNextQuarter.t += val;
+      });
+      nqAch.forEach(r => {
+        const val = parseFloat(r.amount) || 0;
+        buckets.annualNextQuarter.a += val;
+      });
+    }
   } catch(e) {
     document.body.innerHTML += `<div style="background:red;color:white;position:fixed;top:0;left:0;padding:20px;z-index:9999;">ERROR in fetchAllRows: ${e.message}</div>`;
   }
@@ -5420,6 +5458,8 @@ async function renderIncentive() {
 
   // 4. Aggregators
   const buckets = window.buckets = {
+    annualPillar: { t: 0, a: 0 },
+    annualNextQuarter: { t: 0, a: 0 },
     monthly: { t: 0, a: 0, ly: 0 },
     monthlyNext: { t: 0, a: 0 },
     monthlyPillarCurrent: { t: 0, a: 0 },
@@ -5455,6 +5495,7 @@ async function renderIncentive() {
     const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
     buckets.annual.t += val;
+    if (is12PillarBrands(r.brand)) buckets.annualPillar.t += val;
     if (m === currentMonth) {
       buckets.monthly.t += val;
       if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.t += val;
@@ -5476,6 +5517,7 @@ async function renderIncentive() {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
     buckets.annual.a += val;
+    if (is12PillarBrands(r.brand)) buckets.annualPillar.a += val;
     if (m === currentMonth) {
       buckets.monthly.a += val;
       if (is12PillarBrands(r.brand)) buckets.monthlyPillarCurrent.a += val;
