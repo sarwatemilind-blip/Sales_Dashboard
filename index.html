@@ -4560,6 +4560,7 @@ const incentiveHTML = `\n<style>
   <div class="inc-degrowth-banner" id="m-degrowth-banner">
     ⚠️ Degrowth vs last year — no incentive payable
   </div>
+  <div class="inc-no-incentive-msg" id="m-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — achievement below 90% threshold</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
       <div class="inc-section-header-left">
@@ -4627,7 +4628,7 @@ const incentiveHTML = `\n<style>
     </div>
     <div class="inc-section-body">
       <div id="m-slabs"></div>
-      <div class="inc-no-incentive-msg" id="m-no-inc" style="display:none">No incentive — achievement below 90% threshold</div>
+      
     </div>
   </div>
 </div>
@@ -4640,6 +4641,7 @@ const incentiveHTML = `\n<style>
     <div class="inc-total-note">Bimonthly Value Incentive · Period: 2 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="b-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="inc-no-incentive-msg" id="b-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — achievement below 90% threshold</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
       <div class="inc-section-header-left">
@@ -4672,7 +4674,7 @@ const incentiveHTML = `\n<style>
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-gold">💰</div><div><div class="inc-section-title">Incentive Slabs</div><div class="inc-section-period">Active slab highlighted</div></div></div>
       <span class="inc-chevron">⌄</span>
     </div>
-    <div class="inc-section-body"><div id="b-slabs"></div><div class="inc-no-incentive-msg" id="b-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+    <div class="inc-section-body"><div id="b-slabs"></div></div>
   </div>
 </div>
 
@@ -4684,6 +4686,7 @@ const incentiveHTML = `\n<style>
     <div class="inc-total-note">Annual Value Incentive · Period: 12 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="a-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="inc-no-incentive-msg" id="a-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — achievement below 90% threshold</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-navy">🎯</div><div><div class="inc-section-title">Enter Inputs</div><div class="inc-section-period">Enter performance values</div></div></div>
@@ -4713,7 +4716,7 @@ const incentiveHTML = `\n<style>
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-gold">💰</div><div><div class="inc-section-title">Incentive Slabs</div><div class="inc-section-period">Active slab highlighted</div></div></div>
       <span class="inc-chevron">⌄</span>
     </div>
-    <div class="inc-section-body"><div id="a-slabs"></div><div class="inc-no-incentive-msg" id="a-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+    <div class="inc-section-body"><div id="a-slabs"></div></div>
   </div>
 </div>
 
@@ -4725,6 +4728,7 @@ const incentiveHTML = `\n<style>
     <div class="inc-total-note">Servil Jr/Servil LS Jr Incentive · Period: 2 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="p-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="inc-no-incentive-msg" id="p-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — achievement below 90% threshold</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-navy">🎯</div><div><div class="inc-section-title">Enter Inputs</div><div class="inc-section-period">Enter performance values</div></div></div>
@@ -4754,7 +4758,7 @@ const incentiveHTML = `\n<style>
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-gold">💰</div><div><div class="inc-section-title">Incentive Slabs</div><div class="inc-section-period">Active slab highlighted</div></div></div>
       <span class="inc-chevron">⌄</span>
     </div>
-    <div class="inc-section-body"><div id="p-slabs"></div><div class="inc-no-incentive-msg" id="p-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+    <div class="inc-section-body"><div id="p-slabs"></div></div>
   </div>
 </div>
 
@@ -4766,6 +4770,7 @@ const incentiveHTML = `\n<style>
     <div class="inc-total-note">MV 30 Tab/Syp Incentive · Period: 2 Months</div>
   </div>
   <div class="inc-degrowth-banner" id="by-degrowth-banner">⚠️ Degrowth vs last year — no incentive payable</div>
+  <div class="inc-no-incentive-msg" id="by-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — achievement below 90% threshold</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-navy">🎯</div><div><div class="inc-section-title">Enter Inputs</div><div class="inc-section-period">Enter performance values</div></div></div>
@@ -4795,7 +4800,7 @@ const incentiveHTML = `\n<style>
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-gold">💰</div><div><div class="inc-section-title">Incentive Slabs</div><div class="inc-section-period">Active slab highlighted</div></div></div>
       <span class="inc-chevron">⌄</span>
     </div>
-    <div class="inc-section-body"><div id="by-slabs"></div><div class="inc-no-incentive-msg" id="by-no-inc" style="display:none">No incentive — achievement below 90% threshold</div></div>
+    <div class="inc-section-body"><div id="by-slabs"></div></div>
   </div>
 </div>
 
@@ -4832,7 +4837,7 @@ const incentiveHTML = `\n<style>
       <div class="inc-section-header-left"><div class="inc-section-icon inc-icon-green">💰</div><div><div class="inc-section-title">Incentive Slabs</div><div class="inc-section-period">Based on expiry % of sales</div></div></div>
       <span class="inc-chevron">⌄</span>
     </div>
-    <div class="inc-section-body"><div id="h-slabs"></div><div class="inc-no-incentive-msg" id="h-no-inc" style="display:none">No incentive — expiry exceeds 1% of sales</div></div>
+    <div class="inc-section-body"><div id="h-slabs"></div></div>
   </div>
 </div>
 
