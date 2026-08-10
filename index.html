@@ -4994,7 +4994,13 @@ function calcSection(prefix, slabKey, criteria) {
   if (criteria && !blocked) {
     if (criteria.nextMonthAchvPct !== undefined && criteria.nextMonthAchvPct < 0.90) {
       isQualifying = false;
-      qualMsg = `Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (< 90%)`;
+      const mMsg = `Next month overall achv is ${incFmtPct(criteria.nextMonthAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + mMsg : mMsg;
+    }
+    if (criteria.nextMonthBrandAchvPct !== undefined && criteria.nextMonthBrandAchvPct < 0.90) {
+      isQualifying = false;
+      const mMsg = `Next month brand achv is ${incFmtPct(criteria.nextMonthBrandAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + mMsg : mMsg;
     }
     if (criteria.pillarCurrentMonthAchvPct !== undefined && criteria.pillarCurrentMonthAchvPct < 0.90) {
       isQualifying = false;
@@ -5050,16 +5056,17 @@ function calcSection(prefix, slabKey, criteria) {
   if (noIncMsg) {
     if (!isQualifying) {
       noIncMsg.style.display = 'block';
-      const prefix = (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) ? 'Blocked' : 'No incentive';
+      const prefix = (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.nextMonthBrandAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) ? 'Blocked' : 'No incentive';
       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>${prefix}:</b> ${qualMsg}</span>`;
     } else if (earned === 0) {
       noIncMsg.style.display = 'block';
-      let extra = (criteria && criteria.nextMonthAchvPct !== undefined) ? ` (Next month achv was ${incFmtPct(criteria.nextMonthAchvPct)})` : '';
+      let extra = (criteria && criteria.nextMonthAchvPct !== undefined) ? ` (Next month overall achv was ${incFmtPct(criteria.nextMonthAchvPct)})` : '';
       noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive:</b> Achievement below minimum slab${extra}</span>`;
-    } else if (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) {
+    } else if (criteria && (criteria.nextMonthAchvPct !== undefined || criteria.nextMonthBrandAchvPct !== undefined || criteria.pillarCurrentMonthAchvPct !== undefined)) {
       noIncMsg.style.display = 'block';
       let s = [];
-      if (criteria.nextMonthAchvPct !== undefined) s.push(`Next month achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)`);
+      if (criteria.nextMonthAchvPct !== undefined) s.push(`Next month overall achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)`);
+      if (criteria.nextMonthBrandAchvPct !== undefined) s.push(`Next month brand achv is ${incFmtPct(criteria.nextMonthBrandAchvPct)} (>= 90%)`);
       if (criteria.pillarCurrentMonthAchvPct !== undefined) s.push(`Pillar achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (>= 90%)`);
       noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> ${s.join(' and ')}</span>`;
     } else {
@@ -5149,8 +5156,8 @@ function calcAll() {
   const byNextActual = window.buckets ? window.buckets.botyNext.a : 0;
   const byNextAchvPct = byNextTarget > 0 ? byNextActual / byNextTarget : 0;
 
-  const p = calcSection('p', 'pillar', { nextMonthAchvPct: pNextAchvPct });
-  const by = calcSection('by', 'boty', { nextMonthAchvPct: byNextAchvPct });
+  const p = calcSection('p', 'pillar', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: pNextAchvPct });
+  const by = calcSection('by', 'boty', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: byNextAchvPct });
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
