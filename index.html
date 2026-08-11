@@ -270,6 +270,7 @@ function renderLogin(errorMsg, mode = "employee"){
       return;
     }
     session = { ...data[0], is_admin: false, hq_name: displayHqName(data[0].emp_id, data[0].hq_name) };
+    localStorage.setItem("adonis_session", JSON.stringify(session));
     await loadDownline();
     renderShell('dashboard');
   };
@@ -293,6 +294,7 @@ function renderLogin(errorMsg, mode = "employee"){
     session = account ? { ...account, hq_name: displayHqName(account.emp_id, account.hq_name) } : { ...DEFAULT_ADMIN };
     session.is_admin = true;
     session.hq_name = displayHqName(session.emp_id, session.hq_name);
+    localStorage.setItem("adonis_session", JSON.stringify(session));
     await loadDownline();
     renderShell('admin');
   };
@@ -315,6 +317,7 @@ async function loadDownline(){
 
 function logout(){
   session = null; downlineIds = []; allDownlineEmployees = [];
+  localStorage.removeItem("adonis_session");
   renderLogin();
 }
 
@@ -4252,7 +4255,21 @@ async function loadMultiCompareData(activeScopeIds, pill) {
 }
 
 // ---------------- INIT ----------------
-renderLogin();
+async function initApp() {
+  const saved = localStorage.getItem('adonis_session');
+  if (saved) {
+    try {
+      session = JSON.parse(saved);
+      await loadDownline();
+      renderShell(session.is_admin ? 'admin' : 'dashboard');
+      return;
+    } catch(e) {
+      session = null;
+    }
+  }
+  renderLogin();
+}
+initApp();
 </script>
 
 <script>
