@@ -5641,6 +5641,7 @@ async function renderIncentive() {
   tgt.forEach(r => {
     const m = parseInt(r.month_num, 10);
     const val = (parseFloat(r.val_target_per_be) || 0) * 100000 * targetMultiplier;
+    if (m >= hStart && m <= hEnd) { buckets.hygieneCycle.t += val; }
     if (m <= currentMonth) {
       buckets.annual.t += val;
       if (is12PillarBrands(r.brand)) buckets.annualPillar.t += val;
@@ -5667,6 +5668,7 @@ async function renderIncentive() {
     const val = parseFloat(r.amount) || 0;
     
     if (r.brand === "HYGIENE_EXPIRY") { buckets.hygieneExpiry.a += val; return; }
+    if (m >= hStart && m <= hEnd) { buckets.hygieneCycle.a += val; }
     if (m <= currentMonth) {
       buckets.annual.a += val;
       if (is12PillarBrands(r.brand)) buckets.annualPillar.a += val;
