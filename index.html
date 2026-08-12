@@ -2933,27 +2933,52 @@ async function loadStockStatementData(){
 function downloadStockStatementExcel(){
   try {
     const wb = XLSX.utils.book_new();
-    const rows = (lastStockStatementData.rows || []).map(row => ({
-      "Stockist Code": row.stockist_code,
-      "Stockist Name": row.stockist_name,
-      "BE Name": row.beName,
-      "HQ": row.hqName,
-      "State": row.state,
-      "Product Code": row.product_code,
-      "Product Name": row.product_name,
-      "Brand": row.brand,
-      "Opening Units": row.openingUnits,
-      "Opening Value": row.openingValue || 0,
-      "Primary Units": row.primaryUnits,
-      "Primary Value": row.primaryValue,
-      "Sale Rate": row.saleRate,
-      "Total Units": row.totalUnits,
-      "Secondary Units": row.secondaryUnits,
-      "Secondary Value": row.secondaryValue,
-      "Closing Units": row.closingUnits,
-      "Closing Value": row.closingValue
-    }));
-    const ws1 = XLSX.utils.json_to_sheet(rows);
+    const outRows = [];
+    (lastStockStatementData.groups || []).forEach(g => {
+      g.rows.forEach(row => {
+        outRows.push({
+          "Stockist Code": row.stockist_code,
+          "Stockist Name": row.stockist_name,
+          "BE Name": row.beName,
+          "HQ": row.hqName,
+          "State": row.state,
+          "Product Code": row.product_code,
+          "Product Name": row.product_name,
+          "Brand": row.brand,
+          "Opening Units": row.openingUnits,
+          "Opening Value": row.openingValue || 0,
+          "Primary Units": row.primaryUnits,
+          "Primary Value": row.primaryValue,
+          "Sale Rate": row.saleRate,
+          "Total Units": row.totalUnits,
+          "Secondary Units": row.secondaryUnits,
+          "Secondary Value": row.secondaryValue,
+          "Closing Units": row.closingUnits,
+          "Closing Value": row.closingValue
+        });
+      });
+      outRows.push({
+        "Stockist Code": "Subtotal",
+        "Stockist Name": g.stockistName,
+        "BE Name": "",
+        "HQ": "",
+        "State": "",
+        "Product Code": "",
+        "Product Name": "All products",
+        "Brand": "",
+        "Opening Units": g.groupOpeningUnits,
+        "Opening Value": g.groupOpeningValue || 0,
+        "Primary Units": g.groupPrimaryUnits,
+        "Primary Value": g.groupPrimaryValue,
+        "Sale Rate": "",
+        "Total Units": "",
+        "Secondary Units": g.groupSecondaryUnits,
+        "Secondary Value": g.groupSecondaryValue,
+        "Closing Units": g.groupClosingUnits,
+        "Closing Value": g.groupClosingValue
+      });
+    });
+    const ws1 = XLSX.utils.json_to_sheet(outRows);
     XLSX.utils.book_append_sheet(wb, ws1, "Statement");
     if (lastStockStatementData.grandTotals) {
       const ws2 = XLSX.utils.json_to_sheet([{
