@@ -2401,14 +2401,14 @@ async function loadStockStatementData(){
   let currentSales = [];
   try {
     const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
-    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => (isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code))) && !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
+    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => (isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code))) && r.brand !== 'HYGIENE_EXPIRY');
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
   }
   let allSalesHistory = [];
   try {
-    allSalesHistory = (await fetchAllSalesHistory()).filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
+    allSalesHistory = (await fetchAllSalesHistory()).filter(r => r.brand !== 'HYGIENE_EXPIRY');
   } catch (error) {
     console.warn("Failed to load historical sales for product rate fallback:", error);
   }
