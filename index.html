@@ -2401,14 +2401,14 @@ async function loadStockStatementData(){
   let currentSales = [];
   try {
     const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
-    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code)));
+    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => (isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code))) && !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
   }
   let allSalesHistory = [];
   try {
-    allSalesHistory = await fetchAllSalesHistory();
+    allSalesHistory = (await fetchAllSalesHistory()).filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
   } catch (error) {
     console.warn("Failed to load historical sales for product rate fallback:", error);
   }
@@ -3985,8 +3985,8 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, monthsVal, true)
   ]);
 
-  const filteredAch = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
-  const filteredLastYear = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)'));
+  const filteredAch = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
+  const filteredLastYear = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
 
   const teamMap = {};
   // Normalise HQ name (shared with loadDashboardData logic)
