@@ -2935,6 +2935,18 @@ function downloadStockStatementExcel(){
     const wb = XLSX.utils.book_new();
     const outRows = [];
     (lastStockStatementData.groups || []).forEach(g => {
+      const groupTotals = g.rows.reduce((acc, row) => {
+        acc.openingUnits += row.openingUnits || 0;
+        acc.openingValue += row.openingValue || 0;
+        acc.primaryUnits += row.primaryUnits || 0;
+        acc.primaryValue += row.primaryValue || 0;
+        acc.secondaryUnits += row.secondaryUnits || 0;
+        acc.secondaryValue += row.secondaryValue || 0;
+        acc.closingUnits += row.closingUnits || 0;
+        acc.closingValue += row.closingValue || 0;
+        return acc;
+      }, { openingUnits: 0, openingValue: 0, primaryUnits: 0, primaryValue: 0, secondaryUnits: 0, secondaryValue: 0, closingUnits: 0, closingValue: 0 });
+
       g.rows.forEach(row => {
         outRows.push({
           "Stockist Code": row.stockist_code,
@@ -2959,23 +2971,23 @@ function downloadStockStatementExcel(){
       });
       outRows.push({
         "Stockist Code": "Subtotal",
-        "Stockist Name": g.stockistName,
+        "Stockist Name": g.stockist_name,
         "BE Name": "",
         "HQ": "",
         "State": "",
         "Product Code": "",
         "Product Name": "All products",
         "Brand": "",
-        "Opening Units": g.groupOpeningUnits,
-        "Opening Value": g.groupOpeningValue || 0,
-        "Primary Units": g.groupPrimaryUnits,
-        "Primary Value": g.groupPrimaryValue,
+        "Opening Units": groupTotals.openingUnits,
+        "Opening Value": groupTotals.openingValue || 0,
+        "Primary Units": groupTotals.primaryUnits,
+        "Primary Value": groupTotals.primaryValue,
         "Sale Rate": "",
         "Total Units": "",
-        "Secondary Units": g.groupSecondaryUnits,
-        "Secondary Value": g.groupSecondaryValue,
-        "Closing Units": g.groupClosingUnits,
-        "Closing Value": g.groupClosingValue
+        "Secondary Units": groupTotals.secondaryUnits,
+        "Secondary Value": groupTotals.secondaryValue,
+        "Closing Units": groupTotals.closingUnits,
+        "Closing Value": groupTotals.closingValue
       });
     });
     const ws1 = XLSX.utils.json_to_sheet(outRows);
