@@ -12884,16 +12884,23 @@
       };
       buildChildren(DATA.nodes["VP"], "VP");
 
-      // 2. Override Paid Units for "Last Month"
-      Object.values(LEAF_BY_OWNER).forEach(list => { list.forEach(v => {
-        const cfaCode = v.cfaId;
-        const prodCode = v.prodCode;
-        if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
+      // 2. Override Paid Units for "Last Month" using MR level exact mapping
+      Object.entries(LEAF_BY_OWNER).forEach(([ownerNode, list]) => { 
+        list.forEach(v => {
+          const prodCode = v.prodCode;
           if (v.hist && v.hist.length > 0) {
-            v.hist[v.hist.length - 1] = overlay.units[cfaCode][prodCode];
+            if (overlay.leafUnits && overlay.leafUnits[ownerNode] && overlay.leafUnits[ownerNode][prodCode] !== undefined) {
+              v.hist[v.hist.length - 1] = overlay.leafUnits[ownerNode][prodCode];
+            } else {
+              // If overlay exists but this ASM didn't sell this product, it should technically be 0, 
+              // BUT to prevent wiping out data if live data is incomplete, we only wipe it if leafUnits exists for this MR.
+              if (overlay.leafUnits && overlay.leafUnits[ownerNode]) {
+                v.hist[v.hist.length - 1] = 0;
+              }
+            }
           }
-        }
-      }); });
+        }); 
+      });
       console.log("CFA Forecast Overlay Applied Successfully!");
     } else {
       console.warn("CFA Forecast Overlay: No data found in parent dashboard. User needs to upload data first.");

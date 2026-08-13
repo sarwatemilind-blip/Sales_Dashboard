@@ -2631,13 +2631,25 @@ async function loadStockStatementData(){
       }
 
       if (!payload.units[cfaCode]) payload.units[cfaCode] = {};
-      
       if (!payload.units[cfaCode][prodCode]) payload.units[cfaCode][prodCode] = 0;
       payload.units[cfaCode][prodCode] += qty;
       
       if (sanitizedBrand && sanitizedBrand !== prodCode) {
         if (!payload.units[cfaCode][sanitizedBrand]) payload.units[cfaCode][sanitizedBrand] = 0;
         payload.units[cfaCode][sanitizedBrand] += qty;
+      }
+
+      // Add leaf-level units (ASM level) to prevent multiplication issues
+      if (!payload.leafUnits) payload.leafUnits = {};
+      const mrId = "ASM::" + (r.mr_emp_id || "");
+      if (!payload.leafUnits[mrId]) payload.leafUnits[mrId] = {};
+      
+      if (!payload.leafUnits[mrId][prodCode]) payload.leafUnits[mrId][prodCode] = 0;
+      payload.leafUnits[mrId][prodCode] += qty;
+
+      if (sanitizedBrand && sanitizedBrand !== prodCode) {
+        if (!payload.leafUnits[mrId][sanitizedBrand]) payload.leafUnits[mrId][sanitizedBrand] = 0;
+        payload.leafUnits[mrId][sanitizedBrand] += qty;
       }
     });
 
@@ -3220,7 +3232,7 @@ async function handleExpiryUpload(e) {
 
 function renderForecast() {
   const body = document.getElementById("main");
-  const iframeSrc = `sales_forecast_app_8.html?emp_id=${encodeURIComponent(session.emp_id)}`;
+  const iframeSrc = `sales_forecast_app_8.html?emp_id=${encodeURIComponent(session.emp_id)}&cb=${new Date().getTime()}`;
   body.innerHTML = `
     <div style="padding: 15px; height: calc(100vh - 65px);">
       <iframe src="${iframeSrc}" style="width:100%; height:100%; border:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></iframe>
