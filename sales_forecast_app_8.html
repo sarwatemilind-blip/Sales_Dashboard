@@ -13119,7 +13119,7 @@
     }
     const node = DATA.nodes[currentNode];
       const exportCSV = () => {
-    let csv = "Product,CFA,Avg 1yr,Avg 3mo,Last Month,Same Month LY,System Fcst,Your Fcst,Variance,Reason\n";
+    let csv = "Product,CFA,Avg 1yr,Avg 3mo,Last Month,Same Month LY,System Fcst,Your Fcst,Variance,Reason,Final Value\n";
     rows.forEach(r => {
       const d = draft[r.key] || {};
       const val = d.qty !== void 0 && d.qty !== "" ? Number(d.qty) : r.effectiveQty;
@@ -13127,7 +13127,8 @@
       const cfaStr = (r.cfaLabel.split(" - ")[1] || r.cfaLabel).replace(/,/g, '');
       const prodStr = r.prodName.replace(/,/g, '');
       const reasonStr = (d.reason || "").replace(/,/g, '');
-      csv += `${prodStr},${cfaStr},${r.avg12},${r.avg3},${r.lastMonth},${r.sameMonthLastYear},${r.systemQty},${val},${variance}%,${reasonStr}\n`;
+      const finalValue = Math.round(val * r.price);
+      csv += `${prodStr},${cfaStr},${r.avg12},${r.avg3},${r.lastMonth},${r.sameMonthLastYear},${r.systemQty},${val},${variance}%,${reasonStr},${finalValue}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
