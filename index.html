@@ -5186,7 +5186,7 @@ function calcSection(prefix, slabKey, criteria) {
   const ly = parseFloat(document.getElementById(prefix+'-ly').value) || 0;
   const achvPct = target > 0 ? actual / target : 0;
   const growth = ly > 0 ? (actual / ly - 1) : null;
-  const blocked = ly > 0 && growth <= 0;
+  const blocked = (slabKey !== 'pillar' && slabKey !== 'boty') ? (ly > 0 && growth <= 0) : false;
 
   let qualMsg = '';
   let isQualifying = true;
