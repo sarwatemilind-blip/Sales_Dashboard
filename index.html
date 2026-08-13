@@ -2368,7 +2368,7 @@ async function loadStockStatementData(){
     let from = 0;
     while (true) {
       const { data, error } = await sb.from('sales')
-        .select('id, period_year, period_month, stockist_code, stockist_name, hq_code, hq_name, raw_product_code, raw_product_name, brand, canonical_product_code, quantity, amount')
+        .select('id, period_year, period_month, distributor_code, stockist_code, stockist_name, hq_code, hq_name, mr_emp_id, raw_product_code, raw_product_name, brand, canonical_product_code, quantity, amount')
         .eq('period_year', year)
         .eq('period_month', month)
         .order('id', { ascending: true })
@@ -2615,6 +2615,7 @@ async function loadStockStatementData(){
       const cfaCode = (r.distributor_code || "").toString().trim().padStart(3, '0');
       if (!cfaCode) return;
       const prodCode = (r.canonical_product_code || r.raw_product_code || "").toString().trim();
+      const sanitizedBrand = (r.brand || "").toString().trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/_$/, '').toUpperCase();
       const qty = parseFloat(r.quantity) || 0;
 
       let { asm, rsm, zsm } = getHierarchyNames(r.mr_emp_id);
@@ -2630,8 +2631,14 @@ async function loadStockStatementData(){
       }
 
       if (!payload.units[cfaCode]) payload.units[cfaCode] = {};
+      
       if (!payload.units[cfaCode][prodCode]) payload.units[cfaCode][prodCode] = 0;
       payload.units[cfaCode][prodCode] += qty;
+      
+      if (sanitizedBrand && sanitizedBrand !== prodCode) {
+        if (!payload.units[cfaCode][sanitizedBrand]) payload.units[cfaCode][sanitizedBrand] = 0;
+        payload.units[cfaCode][sanitizedBrand] += qty;
+      }
     });
 
     payload.hierarchy["VP"] = vpNode;
