@@ -2605,6 +2605,40 @@ async function loadStockStatementData(){
 
   window.productRateMap = currentProductRateMap;
 
+  window.generateForecastOverlay = function() {
+    const payload = { units: {}, hierarchy: {} };
+    if (!window.salesData || !window.allDownlineEmployees) return payload;
+
+    const vpNode = { label: "VP", lvl: "VP", children: {} };
+
+    window.salesData.forEach(r => {
+      const cfaCode = (r.distributor_code || "").toString().trim();
+      if (!cfaCode) return;
+      const prodCode = (r.raw_product_code || "").toString().trim();
+      const qty = parseFloat(r.quantity) || 0;
+
+      let { asm, rsm, zsm } = getHierarchyNames(r.mr_emp_id);
+      if (asm === '-') asm = 'Unknown ASM';
+      if (rsm === '-') rsm = 'Unknown RSM';
+      if (zsm === '-') zsm = 'Unknown ZSM';
+
+      if (!vpNode.children[zsm]) vpNode.children[zsm] = { label: zsm, lvl: "ZSM", children: {} };
+      if (!vpNode.children[zsm].children[rsm]) vpNode.children[zsm].children[rsm] = { label: rsm, lvl: "RSM", children: {} };
+      if (!vpNode.children[zsm].children[rsm].children[asm]) vpNode.children[zsm].children[rsm].children[asm] = { label: asm, lvl: "ASM", children: {} };
+      if (!vpNode.children[zsm].children[rsm].children[asm].children[cfaCode]) {
+        vpNode.children[zsm].children[rsm].children[asm].children[cfaCode] = { label: cfaCode, lvl: "CFA", children: {} };
+      }
+
+      if (!payload.units[cfaCode]) payload.units[cfaCode] = {};
+      if (!payload.units[cfaCode][prodCode]) payload.units[cfaCode][prodCode] = 0;
+      payload.units[cfaCode][prodCode] += qty;
+    });
+
+    payload.hierarchy["VP"] = vpNode;
+    return payload;
+  };
+
+
   let stockistCatalog = visibleStockistList;
 
   // Dynamically append any unmapped products found in sales so they are not dropped from the Stock Statement!

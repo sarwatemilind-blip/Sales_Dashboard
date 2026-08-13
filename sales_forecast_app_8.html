@@ -12867,6 +12867,45 @@
     if (login) LOGIN_TO_NODE[login.toUpperCase()] = code;
   });
   var SESSION_KEY = "session:loginNode";
+
+  if (window.parent && window.parent.generateForecastOverlay) {
+    const overlay = window.parent.generateForecastOverlay();
+    if (overlay && overlay.hierarchy && overlay.hierarchy["VP"]) {
+      // 1. Override Hierarchy
+      DATA.nodes = overlay.hierarchy;
+      DATA.children = {};
+      const buildChildren = (node, path) => {
+        if (node.children) {
+          DATA.children[path] = Object.keys(node.children);
+          Object.values(node.children).forEach(c => buildChildren(c, path + "/" + c.label));
+        }
+      };
+      buildChildren(DATA.nodes["VP"], "VP");
+
+      // 2. Override Paid Units (Current Month)
+      DATA.effectiveLines.forEach(v => {
+        const cfaCode = v.cfaId;
+        const prodCode = v.prodCode;
+        if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
+          v.qty = overlay.units[cfaCode][prodCode];
+        } else {
+          v.qty = 0;
+        }
+      });
+      if (DATA.systemLines) {
+        DATA.systemLines.forEach(v => {
+          const cfaCode = v.cfaId;
+          const prodCode = v.prodCode;
+          if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
+            v.qty = overlay.units[cfaCode][prodCode];
+          } else {
+            v.qty = 0;
+          }
+        });
+      }
+    }
+  }
+
   function App() {
     const [authChecked, setAuthChecked] = (0, import_react.useState)(false);
     const [loginNode, setLoginNode] = (0, import_react.useState)(null);
