@@ -12869,6 +12869,7 @@
   var SESSION_KEY = "session:loginNode";
 
   
+  
   if (window.parent && window.parent.generateForecastOverlay) {
     const overlay = window.parent.generateForecastOverlay();
     if (overlay && overlay.hierarchy && overlay.hierarchy["VP"]) {
@@ -12883,7 +12884,7 @@
       };
       buildChildren(DATA.nodes["VP"], "VP");
 
-      // 2. Override Paid Units for "Last Month" (which is the last item in the hist array)
+      // 2. Override Paid Units for "Last Month"
       DATA.effectiveLines.forEach(v => {
         const cfaCode = v.cfaId;
         const prodCode = v.prodCode;
@@ -12891,12 +12892,13 @@
           if (v.hist && v.hist.length > 0) {
             v.hist[v.hist.length - 1] = overlay.units[cfaCode][prodCode];
           }
-        } else {
-          if (v.hist && v.hist.length > 0) {
-            v.hist[v.hist.length - 1] = 0;
-          }
         }
       });
+      console.log("CFA Forecast Overlay Applied Successfully!");
+    } else {
+      console.warn("CFA Forecast Overlay: No data found in parent dashboard. User needs to upload data first.");
+      // We can trigger an alert here to notify them why it's falling back to 4812!
+      setTimeout(() => alert("Notice: You haven't uploaded the Sales Data in the dashboard. The CFA Forecast is showing outdated fallback data (e.g. 4812). Please go back, upload the sales data, and then return here."), 1000);
     }
   }
 

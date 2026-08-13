@@ -2614,7 +2614,7 @@ async function loadStockStatementData(){
     window.salesData.forEach(r => {
       const cfaCode = (r.distributor_code || "").toString().trim();
       if (!cfaCode) return;
-      const prodCode = (r.raw_product_code || "").toString().trim();
+      const prodCode = (r.canonical_product_code || r.raw_product_code || "").toString().trim();
       const qty = parseFloat(r.quantity) || 0;
 
       let { asm, rsm, zsm } = getHierarchyNames(r.mr_emp_id);
