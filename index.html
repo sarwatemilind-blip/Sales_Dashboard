@@ -5403,7 +5403,7 @@ function calcAll() {
   const currentBimonthlyAchvPct = currentBimonthlyTarget > 0 ? (currentBimonthlyActual / currentBimonthlyTarget) : 0;
 
   const p = calcSection('p', 'pillar', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: pNextAchvPct, currentBimonthlyAchvPct: currentBimonthlyAchvPct });
-  const by = calcSection('by', 'boty', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: byNextAchvPct });
+  const by = calcSection('by', 'boty', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: byNextAchvPct, currentBimonthlyAchvPct: currentBimonthlyAchvPct });
   const h = calcHygiene();
 
   const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
