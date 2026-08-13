@@ -338,6 +338,7 @@ function renderShell(tab){
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
         <button id="navIncentive" class="${tab==='incentive'?'active':''}">BE Incentives</button>
         <button id="navStock" class="${tab==='stock'?'active':''}">Stock Statement</button>
+        ${session.designation === 'MANAGER' || session.designation === 'ADMIN' ? `<button id="navForecast" class="${tab==='forecast'?'active':''}">CFA Forecast</button>` : ""}
         ${canAdmin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
         <button id="navLogout">Logout</button>
       </nav>
@@ -347,12 +348,14 @@ function renderShell(tab){
   document.getElementById("navDash").onclick = () => renderShell('dashboard');
   if (document.getElementById("navIncentive")) document.getElementById("navIncentive").onclick = () => renderShell('incentive');
   document.getElementById("navStock").onclick = () => renderShell('stock');
+  if (document.getElementById("navForecast")) document.getElementById("navForecast").onclick = () => renderShell('forecast');
   if (canAdmin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
   document.getElementById("navLogout").onclick = logout;
 
   if (tab === 'dashboard') renderDashboard();
   else if (tab === 'stock') renderStockStatement();
   else if (tab === 'incentive') renderIncentive();
+  else if (tab === 'forecast') renderForecast();
   else if (tab === 'admin' && canAdmin) renderAdmin();
   else if (tab === 'admin') renderDashboard();
 }
@@ -3170,6 +3173,16 @@ async function handleExpiryUpload(e) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+function renderForecast() {
+  const body = document.getElementById("main");
+  const iframeSrc = `sales_forecast_app_8.html?emp_id=${encodeURIComponent(session.emp_id)}`;
+  body.innerHTML = `
+    <div style="padding: 15px; height: calc(100vh - 65px);">
+      <iframe src="${iframeSrc}" style="width:100%; height:100%; border:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></iframe>
+    </div>
+  `;
 }
 
 function renderAdmin(){
