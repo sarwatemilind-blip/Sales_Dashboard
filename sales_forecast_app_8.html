@@ -12995,15 +12995,7 @@
           overriddenBelow: v.overridden,
           method: v.method,
           mape: v.mape,
-          price: (() => {
-            let dynPrice = 0;
-            if (window.parent && window.parent.productRateMap) {
-              const pName = DATA.prods[v.prodCode] || v.prodCode;
-              const stats = window.parent.productRateMap.get(pName);
-              if (stats && stats.rate) dynPrice = stats.rate;
-            }
-            return dynPrice > 0 ? dynPrice : (DATA.linePrices[key] || 0);
-          })()
+          price: DATA.linePrices[key] || 0
         });
       });
       arr.sort((a, b) => a.cfaLabel.localeCompare(b.cfaLabel) || a.prodName.localeCompare(b.prodName));
