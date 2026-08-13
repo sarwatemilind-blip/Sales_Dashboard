@@ -2603,6 +2603,8 @@ async function loadStockStatementData(){
     }
   });
 
+  window.productRateMap = currentProductRateMap;
+
   let stockistCatalog = visibleStockistList;
 
   // Dynamically append any unmapped products found in sales so they are not dropped from the Stock Statement!
