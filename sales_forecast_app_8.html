@@ -12868,6 +12868,7 @@
   });
   var SESSION_KEY = "session:loginNode";
 
+  
   if (window.parent && window.parent.generateForecastOverlay) {
     const overlay = window.parent.generateForecastOverlay();
     if (overlay && overlay.hierarchy && overlay.hierarchy["VP"]) {
@@ -12882,27 +12883,20 @@
       };
       buildChildren(DATA.nodes["VP"], "VP");
 
-      // 2. Override Paid Units (Current Month)
+      // 2. Override Paid Units for "Last Month" (which is the last item in the hist array)
       DATA.effectiveLines.forEach(v => {
         const cfaCode = v.cfaId;
         const prodCode = v.prodCode;
         if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
-          v.qty = overlay.units[cfaCode][prodCode];
+          if (v.hist && v.hist.length > 0) {
+            v.hist[v.hist.length - 1] = overlay.units[cfaCode][prodCode];
+          }
         } else {
-          v.qty = 0;
+          if (v.hist && v.hist.length > 0) {
+            v.hist[v.hist.length - 1] = 0;
+          }
         }
       });
-      if (DATA.systemLines) {
-        DATA.systemLines.forEach(v => {
-          const cfaCode = v.cfaId;
-          const prodCode = v.prodCode;
-          if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
-            v.qty = overlay.units[cfaCode][prodCode];
-          } else {
-            v.qty = 0;
-          }
-        });
-      }
     }
   }
 
