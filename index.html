@@ -5206,6 +5206,11 @@ function calcSection(prefix, slabKey, criteria) {
       const pMsg = `Pillar brands achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (< 90%)`;
       qualMsg = qualMsg ? qualMsg + ' and ' + pMsg : pMsg;
     }
+    if (criteria.currentBimonthlyAchvPct !== undefined && criteria.currentBimonthlyAchvPct < 0.90) {
+      isQualifying = false;
+      const mMsg = `Overall 2-months achv is ${incFmtPct(criteria.currentBimonthlyAchvPct)} (< 90%)`;
+      qualMsg = qualMsg ? qualMsg + ' and ' + mMsg : mMsg;
+    }
     if (criteria.pillarAnnualAchvPct !== undefined && criteria.pillarAnnualAchvPct < 0.90) {
       isQualifying = false;
       const pMsg = `Pillar yearly achv is ${incFmtPct(criteria.pillarAnnualAchvPct)} (< 90%)`;
@@ -5277,6 +5282,7 @@ function calcSection(prefix, slabKey, criteria) {
       if (criteria.nextMonthAchvPct !== undefined) s.push(`Next month overall achv is ${incFmtPct(criteria.nextMonthAchvPct)} (>= 90%)`);
       if (criteria.nextMonthBrandAchvPct !== undefined) s.push(`Next month brand achv is ${incFmtPct(criteria.nextMonthBrandAchvPct)} (>= 90%)`);
       if (criteria.pillarCurrentMonthAchvPct !== undefined) s.push(`Pillar achv is ${incFmtPct(criteria.pillarCurrentMonthAchvPct)} (>= 90%)`);
+      if (criteria.currentBimonthlyAchvPct !== undefined) s.push(`Overall 2-months achv is ${incFmtPct(criteria.currentBimonthlyAchvPct)} (>= 90%)`);
       if (criteria.pillarAnnualAchvPct !== undefined) s.push(`Pillar yearly achv is ${incFmtPct(criteria.pillarAnnualAchvPct)} (>= 90%)`);
       if (criteria.nextQuarterAchvPct !== undefined) s.push(`Next quarter achv is ${incFmtPct(criteria.nextQuarterAchvPct)} (>= 90%)`);
       noIncMsg.innerHTML = `<span style="color:var(--good)"><b>Qualified:</b> ${s.join(' and ')}</span>`;
@@ -5392,7 +5398,11 @@ function calcAll() {
   const byNextActual = window.buckets ? window.buckets.botyNext.a : 0;
   const byNextAchvPct = byNextTarget > 0 ? byNextActual / byNextTarget : 0;
 
-  const p = calcSection('p', 'pillar', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: pNextAchvPct });
+  const currentBimonthlyTarget = parseFloat(document.getElementById('b-target').value) || 0;
+  const currentBimonthlyActual = parseFloat(document.getElementById('b-actual').value) || 0;
+  const currentBimonthlyAchvPct = currentBimonthlyTarget > 0 ? (currentBimonthlyActual / currentBimonthlyTarget) : 0;
+
+  const p = calcSection('p', 'pillar', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: pNextAchvPct, currentBimonthlyAchvPct: currentBimonthlyAchvPct });
   const by = calcSection('by', 'boty', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: byNextAchvPct });
   const h = calcHygiene();
 
