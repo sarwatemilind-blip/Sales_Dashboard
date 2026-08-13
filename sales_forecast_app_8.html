@@ -12885,7 +12885,7 @@
       buildChildren(DATA.nodes["VP"], "VP");
 
       // 2. Override Paid Units for "Last Month"
-      DATA.effectiveLines.forEach(v => {
+      Object.values(LEAF_BY_OWNER).forEach(list => { list.forEach(v => {
         const cfaCode = v.cfaId;
         const prodCode = v.prodCode;
         if (overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
@@ -12893,7 +12893,7 @@
             v.hist[v.hist.length - 1] = overlay.units[cfaCode][prodCode];
           }
         }
-      });
+      }); });
       console.log("CFA Forecast Overlay Applied Successfully!");
     } else {
       console.warn("CFA Forecast Overlay: No data found in parent dashboard. User needs to upload data first.");

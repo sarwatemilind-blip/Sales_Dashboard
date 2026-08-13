@@ -2612,7 +2612,7 @@ async function loadStockStatementData(){
     const vpNode = { label: "VP", lvl: "VP", children: {} };
 
     currentSales.forEach(r => {
-      const cfaCode = (r.distributor_code || "").toString().trim();
+      const cfaCode = (r.distributor_code || "").toString().trim().padStart(3, '0');
       if (!cfaCode) return;
       const prodCode = (r.canonical_product_code || r.raw_product_code || "").toString().trim();
       const qty = parseFloat(r.quantity) || 0;
