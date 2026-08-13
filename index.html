@@ -2607,11 +2607,11 @@ async function loadStockStatementData(){
 
   window.generateForecastOverlay = function() {
     const payload = { units: {}, hierarchy: {} };
-    if (!window.salesData || !window.allDownlineEmployees) return payload;
+    if (!currentSales || !allDownlineEmployees) return payload;
 
     const vpNode = { label: "VP", lvl: "VP", children: {} };
 
-    window.salesData.forEach(r => {
+    currentSales.forEach(r => {
       const cfaCode = (r.distributor_code || "").toString().trim();
       if (!cfaCode) return;
       const prodCode = (r.canonical_product_code || r.raw_product_code || "").toString().trim();
