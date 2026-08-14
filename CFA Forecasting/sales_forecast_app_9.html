@@ -12866,8 +12866,14 @@
       });
 
       // 9. Trigger re-render by dispatching a custom event
-      window.dispatchEvent(new CustomEvent('dataRefreshed'));
-      console.log('[CFA] Dynamic data loaded:', newRecords.length, 'records');
+      // Force React to re-render with the new data
+      if (window._cfaRoot && window._cfaApp) {
+        window._cfaRoot.render(import_react.default.createElement(window._cfaApp, null));
+        console.log('[CFA] Dynamic data loaded and React re-rendered:', newRecords.length, 'records');
+      } else {
+        window.dispatchEvent(new CustomEvent('dataRefreshed'));
+        console.log('[CFA] Dynamic data loaded:', newRecords.length, 'records');
+      }
     } catch (err) {
       console.error('[CFA] fetchAndReload error:', err);
     }
@@ -13339,6 +13345,8 @@ const isTop = node && node.lvl === "VP";
     return children.some((c) => hasSubmissionBelow(c, overrides));
   }
   var root = (0, import_client.createRoot)(document.getElementById("root"));
+  window._cfaRoot = root;
+  window._cfaApp = App;
   root.render(/* @__PURE__ */ import_react.default.createElement(App, null));
 })();
 /*! Bundled license information:
