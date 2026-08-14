@@ -173,6 +173,7 @@ const FY_MONTHS = [
 
 <script>
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.sb = sb;
 let session = null; // { emp_id, name, designation, hq_code, hq_name, manager_emp_id, is_admin }
 let isStockStatementDirty = false;
 let downlineIds = [];
@@ -3232,7 +3233,7 @@ async function handleExpiryUpload(e) {
 
 function renderForecast() {
   const body = document.getElementById("main");
-  const iframeSrc = `sales_forecast_app_8.html?emp_id=${encodeURIComponent(session.emp_id)}&cb=${new Date().getTime()}`;
+  const iframeSrc = `sales_forecast_app_9.html?emp_id=${encodeURIComponent(session.emp_id)}&cb=${new Date().getTime()}`;
   body.innerHTML = `
     <div style="padding: 15px; height: calc(100vh - 65px);">
       <iframe src="${iframeSrc}" style="width:100%; height:100%; border:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></iframe>
@@ -3551,7 +3552,8 @@ async function handleUpload(e){
     const { error: clearError } = await sb.from('sales')
       .delete()
       .eq('period_year', y)
-      .eq('period_month', m);
+      .eq('period_month', m)
+      .neq('brand', 'HYGIENE_EXPIRY');
     if (clearError) {
       console.warn(`Could not clear sales data for period ${y}-${m}:`, clearError.message);
     }
