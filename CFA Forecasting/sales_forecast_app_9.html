@@ -1263,11 +1263,14 @@
           try {
             throw Error();
           } catch (x) {
-            var match = x.stack.trim().match(/\n( *(at )?)/);
+            var match = x.stack.trim().match(/
+( *(at )?)/);
             prefix = match && match[1] || "";
-            suffix = -1 < x.stack.indexOf("\n    at") ? " (<anonymous>)" : -1 < x.stack.indexOf("@") ? "@unknown:0:0" : "";
+            suffix = -1 < x.stack.indexOf("
+    at") ? " (<anonymous>)" : -1 < x.stack.indexOf("@") ? "@unknown:0:0" : "";
           }
-        return "\n" + prefix + name + suffix;
+        return "
+" + prefix + name + suffix;
       }
       var reentry = false;
       function describeNativeComponentFrame(fn, construct) {
@@ -1331,7 +1334,9 @@
           );
           var _RunInRootFrame$Deter = RunInRootFrame.DetermineComponentFrameRoot(), sampleStack = _RunInRootFrame$Deter[0], controlStack = _RunInRootFrame$Deter[1];
           if (sampleStack && controlStack) {
-            var sampleLines = sampleStack.split("\n"), controlLines = controlStack.split("\n");
+            var sampleLines = sampleStack.split("
+"), controlLines = controlStack.split("
+");
             for (namePropDescriptor = RunInRootFrame = 0; RunInRootFrame < sampleLines.length && !sampleLines[RunInRootFrame].includes("DetermineComponentFrameRoot"); )
               RunInRootFrame++;
             for (; namePropDescriptor < controlLines.length && !controlLines[namePropDescriptor].includes(
@@ -1346,7 +1351,8 @@
                 if (1 !== RunInRootFrame || 1 !== namePropDescriptor) {
                   do
                     if (RunInRootFrame--, namePropDescriptor--, 0 > namePropDescriptor || sampleLines[RunInRootFrame] !== controlLines[namePropDescriptor]) {
-                      var frame = "\n" + sampleLines[RunInRootFrame].replace(" at new ", " at ");
+                      var frame = "
+" + sampleLines[RunInRootFrame].replace(" at new ", " at ");
                       fn.displayName && frame.includes("<anonymous>") && (frame = frame.replace("<anonymous>", fn.displayName));
                       return frame;
                     }
@@ -1393,7 +1399,9 @@
           while (workInProgress2);
           return info;
         } catch (x) {
-          return "\nError generating stack: " + x.message + "\n" + x.stack;
+          return "
+Error generating stack: " + x.message + "
+" + x.stack;
         }
       }
       var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -1864,7 +1872,8 @@
           return doc.body;
         }
       }
-      var escapeSelectorAttributeValueInsideDoubleQuotesRegex = /[\n"\\]/g;
+      var escapeSelectorAttributeValueInsideDoubleQuotesRegex = /[
+"\\]/g;
       function escapeSelectorAttributeValueInsideDoubleQuotes(value) {
         return value.replace(
           escapeSelectorAttributeValueInsideDoubleQuotesRegex,
@@ -2087,7 +2096,17 @@
         ["xmlnsXlink", "xmlns:xlink"],
         ["xHeight", "x-height"]
       ]);
-      var isJavaScriptProtocol = /^[\u0000-\u001F ]*j[\r\n\t]*a[\r\n\t]*v[\r\n\t]*a[\r\n\t]*s[\r\n\t]*c[\r\n\t]*r[\r\n\t]*i[\r\n\t]*p[\r\n\t]*t[\r\n\t]*:/i;
+      var isJavaScriptProtocol = /^[\u0000-\u001F ]*j[\r
+\t]*a[\r
+\t]*v[\r
+\t]*a[\r
+\t]*s[\r
+\t]*c[\r
+\t]*r[\r
+\t]*i[\r
+\t]*p[\r
+\t]*t[\r
+\t]*:/i;
       function sanitizeURL(url) {
         return isJavaScriptProtocol.test("" + url) ? "javascript:throw new Error('React has blocked a javascript: URL as a security precaution.')" : url;
       }
@@ -10425,10 +10444,12 @@
         }
         0 !== listeners.length && dispatchQueue.push({ event, listeners });
       }
-      var NORMALIZE_NEWLINES_REGEX = /\r\n?/g;
+      var NORMALIZE_NEWLINES_REGEX = /\r
+?/g;
       var NORMALIZE_NULL_AND_REPLACEMENT_REGEX = /\u0000|\uFFFD/g;
       function normalizeMarkupForTextOrAttribute(markup) {
-        return ("string" === typeof markup ? markup : "" + markup).replace(NORMALIZE_NEWLINES_REGEX, "\n").replace(NORMALIZE_NULL_AND_REPLACEMENT_REGEX, "");
+        return ("string" === typeof markup ? markup : "" + markup).replace(NORMALIZE_NEWLINES_REGEX, "
+").replace(NORMALIZE_NULL_AND_REPLACEMENT_REGEX, "");
       }
       function checkForUnmatchedText(serverText, clientText) {
         clientText = normalizeMarkupForTextOrAttribute(clientText);
@@ -12768,7 +12789,8 @@
   histMonths: ["2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"],
   nodes: {},
   records: []
-};\n
+};
+
 async function fetchDynamicData() {
   if (!window.parent || !window.parent.sb) {
     console.error('Parent window not found.');
@@ -13333,7 +13355,8 @@ async function fetchDynamicData() {
     }
     const node = DATA.nodes[currentNode];
       const exportCSV = () => {
-    let csv = "Product,CFA,Avg 1yr,Avg 3mo,Last Month,Same Month LY,System Fcst,Your Fcst,Variance,Reason,Final Value\n";
+    let csv = "Product,CFA,Avg 1yr,Avg 3mo,Last Month,Same Month LY,System Fcst,Your Fcst,Variance,Reason,Final Value
+";
     rows.forEach(r => {
       const d = draft[r.key] || {};
       const val = d.qty !== void 0 && d.qty !== "" ? Number(d.qty) : r.effectiveQty;
@@ -13342,7 +13365,8 @@ async function fetchDynamicData() {
       const prodStr = r.prodName.replace(/,/g, '');
       const reasonStr = (d.reason || "").replace(/,/g, '');
       const finalValue = Math.round(val * r.price);
-      csv += `${prodStr},${cfaStr},${r.avg12},${r.avg3},${r.lastMonth},${r.sameMonthLastYear},${r.systemQty},${val},${variance}%,${reasonStr},${finalValue}\n`;
+      csv += `${prodStr},${cfaStr},${r.avg12},${r.avg3},${r.lastMonth},${r.sameMonthLastYear},${r.systemQty},${val},${variance}%,${reasonStr},${finalValue}
+`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
