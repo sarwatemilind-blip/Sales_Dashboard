@@ -12772,20 +12772,19 @@
   // ─── DYNAMIC DATA LOADER ────────────────────────────────────────────────────
   async function fetchAndReload() {
     try {
-      const sb = window.parent && window.parent.sb;
-      if (!sb) { console.warn('[CFA] No parent Supabase client'); return; }
-      const url = sb.supabaseUrl;
-      const key = sb.supabaseKey;
+      // Use Supabase credentials defined in the page
+      const url = SUPABASE_URL;
+      const key = SUPABASE_ANON_KEY;
       const h = { 'apikey': key, 'Authorization': 'Bearer ' + key };
 
       // 1. Employees
       const empRes = await fetch(url + '/rest/v1/employees?select=*', { headers: h });
       const empData = await empRes.json();
 
-      // 2. Stockist mapping (paginated)
+      // 2. Stockist mapping (paginated) - need distributor_name for CFA matching
       let allSm = [], smOff = 0;
       while (true) {
-        const r = await fetch(url + '/rest/v1/stockist_mapping?select=stockist_code,hq_code,distributor_name&limit=5000&offset=' + smOff, { headers: h });
+        const r = await fetch(url + '/rest/v1/stockist_mapping?select=stockist_code,distributor_name&limit=5000&offset=' + smOff, { headers: h });
         const d = await r.json();
         if (!d || !d.length) break;
         allSm.push(...d);
@@ -12795,32 +12794,38 @@
       const smMap = {};
       allSm.forEach(r => { if (r.stockist_code) smMap[r.stockist_code] = r; });
 
-      // 3. Sales (paginated)
-      let allSales = [], sOff = 0;
+      // 3. Fetch ONLY July 2026 sales (hist[11]) - much faster than all sales
+      let julySales = [], jOff = 0;
       while (true) {
-        const r = await fetch(url + '/rest/v1/sales?select=stockist_code,brand,canonical_product_code,period_year,period_month,quantity&limit=5000&offset=' + sOff, { headers: h });
+        const r = await fetch(url + '/rest/v1/sales?select=stockist_code,canonical_product_code,quantity&period_year=eq.2026&period_month=eq.7&limit=5000&offset=' + jOff, { headers: h });
         const d = await r.json();
         if (!d || !d.length) break;
-        allSales.push(...d);
+        julySales.push(...d);
         if (d.length < 5000) break;
-        sOff += d.length;
+        jOff += d.length;
       }
 
-      // 4. Aggregate: hq_code -> prodCode -> hist[0..11] from live DB
-      const idxOf = (y, m) => (parseInt(y) * 12 + parseInt(m)) - (2025 * 12 + 8);
-      const hqProdHist = {};
-      for (const s of allSales) {
-        if (s.canonical_product_code === 'EXPIRY' || s.brand === 'HYGIENE_EXPIRY') continue;
+      // 4. Aggregate July sales by distributor_name + prodCode
+      //    stockist_mapping.distributor_name matches DATA.cfas values (without city suffix)
+      const julyByDistribProd = {};
+      for (const s of julySales) {
+        if (s.canonical_product_code === 'EXPIRY') continue;
         const sm = smMap[s.stockist_code];
-        if (!sm || !sm.hq_code) continue;
-        const idx = idxOf(s.period_year, s.period_month);
-        if (idx < 0 || idx >= 12) continue;
-        if (!hqProdHist[sm.hq_code]) hqProdHist[sm.hq_code] = {};
-        if (!hqProdHist[sm.hq_code][s.canonical_product_code]) hqProdHist[sm.hq_code][s.canonical_product_code] = new Array(12).fill(0);
-        hqProdHist[sm.hq_code][s.canonical_product_code][idx] += Number(s.quantity) || 0;
+        if (!sm || !sm.distributor_name) continue;
+        const name = sm.distributor_name;
+        if (!julyByDistribProd[name]) julyByDistribProd[name] = {};
+        julyByDistribProd[name][s.canonical_product_code] = (julyByDistribProd[name][s.canonical_product_code] || 0) + (Number(s.quantity) || 0);
       }
 
-      // 5. Build live nodes with correct name/login fields
+      // 5. Build cfaId -> raw distributor_name lookup
+      //    DATA.cfas["021"] = "ADONIS LABORATORIES PVT LTD - Guwahati"
+      //    Raw name (without city) = "ADONIS LABORATORIES PVT LTD" (matches stockist_mapping)
+      const cfaToRawName = {};
+      Object.entries(DATA.cfas).forEach(([cfaId, fullName]) => {
+        cfaToRawName[cfaId] = fullName.includes(' - ') ? fullName.substring(0, fullName.lastIndexOf(' - ')) : fullName;
+      });
+
+      // 6. Update live nodes from fresh employee data
       const newNodes = {};
       empData.forEach(e => {
         const code = e.designation + '::' + e.emp_id;
@@ -12833,14 +12838,14 @@
       });
       DATA.nodes = newNodes;
 
-      // 6. Rebuild CHILDREN
+      // 7. Rebuild CHILDREN
       Object.keys(CHILDREN).forEach(k => delete CHILDREN[k]);
       Object.keys(DATA.nodes).forEach(code => {
         const p = DATA.nodes[code].parent;
         if (p) { if (!CHILDREN[p]) CHILDREN[p] = []; CHILDREN[p].push(code); }
       });
 
-      // 7. Update VP_ID and LOGIN_TO_NODE (module-level vars)
+      // 8. Update VP_ID and LOGIN_TO_NODE
       VP_ID = Object.keys(DATA.nodes).find(k => DATA.nodes[k].lvl === 'VP');
       Object.keys(LOGIN_TO_NODE).forEach(k => delete LOGIN_TO_NODE[k]);
       Object.keys(DATA.nodes).forEach(code => {
@@ -12848,30 +12853,56 @@
         if (login) LOGIN_TO_NODE[login.toUpperCase()] = code;
       });
 
-      // 8. Build owner -> hq_code map
-      const ownerToHq = {};
-      empData.forEach(e => { if (e.hq_code) ownerToHq[e.designation + '::' + e.emp_id] = e.hq_code; });
-
-      // 9. PATCH hist in existing LEAF_BY_OWNER records with live DB data
-      //    This preserves cfaId, forecastQty, method, mape from static records
-      //    while replacing all 12 hist months with accurate DB values
-      let patched = 0;
+      // 9. Patch ONLY hist[11] (July 2026) in LEAF_BY_OWNER records.
+      //    hist[0..10] (Aug25–Jun26) stay exactly as in static data.
+      //    Group records by cfaId+prodCode, then distribute July total proportionally.
+      const groupedRecords = {};
       Object.entries(LEAF_BY_OWNER).forEach(([ownerNode, list]) => {
-        const hq = ownerToHq[ownerNode];
-        if (!hq || !hqProdHist[hq]) return;
         list.forEach(v => {
-          const liveHist = hqProdHist[hq][v.prodCode];
-          if (liveHist) {
-            for (let i = 0; i < 12; i++) v.hist[i] = liveHist[i] || 0;
-            patched++;
-          }
+          const key = v.cfaId + '|' + v.prodCode;
+          if (!groupedRecords[key]) groupedRecords[key] = [];
+          groupedRecords[key].push(v);
         });
       });
 
-      // 10. Force React to re-render with patched hist data
+      let patched = 0;
+      Object.entries(groupedRecords).forEach(([key, records]) => {
+        const sep = key.indexOf('|');
+        const cfaId = key.substring(0, sep);
+        const prodCode = key.substring(sep + 1);
+        const rawName = cfaToRawName[cfaId];
+        if (!rawName) return;
+        const dbJuly = (julyByDistribProd[rawName] && julyByDistribProd[rawName][prodCode]) || 0;
+
+        // Sum of existing hist[11] across all records for this cfaId+prodCode
+        const staticTotal = records.reduce((s, v) => s + (Number(v.hist[11]) || 0), 0);
+
+        if (staticTotal === 0 || dbJuly === 0) {
+          // Cannot scale from/to zero: put entire DB total into first record, zero others
+          records.forEach(v => { v.hist[11] = 0; });
+          records[0].hist[11] = dbJuly;
+        } else {
+          // Proportional scaling: preserve relative distribution across BEs/stockists
+          const scale = dbJuly / staticTotal;
+          let assigned = 0;
+          records.forEach((v, i) => {
+            if (i < records.length - 1) {
+              const newVal = Math.round(Number(v.hist[11]) * scale);
+              v.hist[11] = newVal;
+              assigned += newVal;
+            } else {
+              // Last record absorbs rounding remainder to ensure exact DB total
+              v.hist[11] = dbJuly - assigned;
+            }
+          });
+        }
+        patched++;
+      });
+
+      // 10. Force React re-render with updated July data
       if (window._cfaRoot && window._cfaApp) {
         window._cfaRoot.render(import_react.default.createElement(window._cfaApp, null));
-        console.log('[CFA] Live DB data patched. Rows patched:', patched, '| HQs in DB:', Object.keys(hqProdHist).length);
+        console.log('[CFA] July 2026 hist patched. CFA+Product groups updated:', patched);
       }
     } catch (err) {
       console.error('[CFA] fetchAndReload error:', err);
@@ -12983,6 +13014,103 @@
     return `overrides:${month}`;
   }
   var VP_ID = Object.keys(DATA.nodes).find((k) => DATA.nodes[k].lvl === "VP");
+
+  function fmtInt(n) {
+    if (n === null || n === void 0 || isNaN(n)) return "-";
+    return Math.round(n).toLocaleString("en-IN");
+  }
+  function fmtINR(n) {
+    if (n === null || n === void 0 || isNaN(n)) return "-";
+    const v = Math.round(n);
+    const sign = v < 0 ? "-" : "";
+    const av = Math.abs(v);
+    if (av >= 1e5) return sign + "\u20B9" + (av / 1e5).toFixed(2) + "L";
+    return sign + "\u20B9" + av.toLocaleString("en-IN");
+  }
+  function pctVariance(mgr, sys) {
+    if (!sys || sys === 0) return mgr > 0 ? 100 : 0;
+    return (mgr - sys) / sys * 100;
+  }
+  function Badge({ children, tone = "gray" }) {
+    const tones = {
+      gray: "bg-slate-100 text-slate-600",
+      green: "bg-emerald-50 text-emerald-700",
+      amber: "bg-amber-50 text-amber-700",
+      red: "bg-rose-50 text-rose-700",
+      blue: "bg-sky-50 text-sky-700"
+    };
+    return /* @__PURE__ */ import_react.default.createElement("span", { className: `inline-block px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${tones[tone]}` }, children);
+  }
+  var CHILDREN = {};
+  Object.keys(DATA.nodes).forEach((code) => {
+    const p = DATA.nodes[code].parent;
+    if (p) {
+      if (!CHILDREN[p]) CHILDREN[p] = [];
+      CHILDREN[p].push(code);
+    }
+  });
+  var LEAF_BY_OWNER = {};
+  DATA.records.forEach((r) => {
+    const [id, ownerNode, cfaId, prodCode, hist, avgPrice, forecastQty, method, mape] = r;
+    if (!LEAF_BY_OWNER[ownerNode]) LEAF_BY_OWNER[ownerNode] = [];
+    LEAF_BY_OWNER[ownerNode].push({ cfaId, prodCode, hist, forecastQty, method, mape });
+  });
+  function lineKeyOf(cfaId, prodCode) {
+    return cfaId + "|" + prodCode;
+  }
+  function computeNodeLines(nodeCode, overrides) {
+    const merged = /* @__PURE__ */ new Map();
+    (LEAF_BY_OWNER[nodeCode] || []).forEach((r) => {
+      const key = lineKeyOf(r.cfaId, r.prodCode);
+      if (!merged.has(key)) {
+        merged.set(key, { cfaId: r.cfaId, prodCode: r.prodCode, hist: new Array(r.hist.length).fill(0), qty: 0, systemQty: 0, overridden: false, method: r.method, mape: r.mape });
+      }
+      const m = merged.get(key);
+      m.qty += r.forecastQty;
+      m.systemQty += r.forecastQty;
+      m.hist = m.hist.map((h, i) => h + r.hist[i]);
+    });
+    const children = CHILDREN[nodeCode] || [];
+    children.forEach((childCode) => {
+      const childLines = computeNodeLines(childCode, overrides);
+      childLines.forEach((v, key) => {
+        if (!merged.has(key)) {
+          merged.set(key, { cfaId: v.cfaId, prodCode: v.prodCode, hist: v.hist.slice(), qty: 0, systemQty: 0, overridden: false, method: null, mape: null });
+        }
+        const m = merged.get(key);
+        m.qty += v.qty;
+        m.systemQty += v.systemQty;
+        m.hist = m.hist.map((h, i) => h + v.hist[i]);
+        if (v.overridden) m.overridden = true;
+      });
+    });
+    const nodeOv = overrides[nodeCode] || {};
+    Object.keys(nodeOv).forEach((key) => {
+      if (merged.has(key)) {
+        merged.get(key).qty = Number(nodeOv[key].qty);
+        merged.get(key).overridden = true;
+      }
+    });
+    return merged;
+  }
+  function ancestorChain(nodeCode) {
+    const chain = [];
+    let cur = nodeCode;
+    while (cur) {
+      chain.unshift(cur);
+      cur = DATA.nodes[cur] ? DATA.nodes[cur].parent : null;
+    }
+    return chain;
+  }
+  function nodeLabel(code) {
+    const n = DATA.nodes[code];
+    if (!n) return code;
+    return n.name && n.name !== "-" ? n.name : `${LEVEL_LABELS[n.lvl]} (${code})`;
+  }
+  function overridesKey(month) {
+    return `overrides:${month}`;
+  }
+  var VP_ID = Object.keys(DATA.nodes).find((k) => DATA.nodes[k].lvl === "VP");
   var LOGIN_TO_NODE = {};
   Object.keys(DATA.nodes).forEach((code) => {
     const login = DATA.nodes[code].login;
@@ -12990,10 +13118,43 @@
   });
   var SESSION_KEY = "session:loginNode";
 
-  
-  
-  if (window.parent && window.parent.generateForecastOverlay) {
-    const overlay = window.parent.generateForecastOverlay();
+  function App() {
+    const [authChecked, setAuthChecked] = (0, import_react.useState)(false);
+    const [loginNode, setLoginNode] = (0, import_react.useState)(null);
+    const [loginInput, setLoginInput] = (0, import_react.useState)("");
+    const [loginError, setLoginError] = (0, import_react.useState)("");
+    const [screen, setScreen] = (0, import_react.useState)("node");
+    const [selectedCfaId, setSelectedCfaId] = (0, import_react.useState)(null);
+    const [currentNode, setCurrentNode] = (0, import_react.useState)(null);
+    const [overrides, setOverrides] = (0, import_react.useState)({});
+    const [loading, setLoading] = (0, import_react.useState)(true);
+    const [saveStatus, setSaveStatus] = (0, import_react.useState)("idle");
+    const [draft, setDraft] = (0, import_react.useState)({});
+    const [rowSearch, setRowSearch] = (0, import_react.useState)("");
+    (0, import_react.useEffect)(() => {
+      (async () => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const empId = params.get('emp_id');
+          let autoCode = null;
+          if (empId) {
+             autoCode = LOGIN_TO_NODE[empId.trim().toUpperCase()] || (DATA.nodes[empId.trim().toUpperCase()] ? empId.trim().toUpperCase() : null);
+          }
+          if (autoCode) {
+            setLoginNode(autoCode);
+            setCurrentNode(autoCode);
+          } else {
+          }
+        }
+      }
+    });
+  });
+  console.log("CFA Forecast Overlay Applied Successfully!");
+} else {
+  console.warn("CFA Forecast Overlay: No data found in parent dashboard. User needs to upload data first.");
+  setTimeout(() => alert("Notice: You haven't uploaded the Sales Data in the dashboard. The CFA Forecast is showing outdated fallback data (e.g. 4812). Please go back, upload the sales data, and then return here."), 1000);
+}
+*/
     if (overlay && overlay.hierarchy && overlay.hierarchy["VP"]) {
       // 1. Override Hierarchy
       DATA.nodes = overlay.hierarchy;
@@ -13064,7 +13225,7 @@
     const [loginInput, setLoginInput] = (0, import_react.useState)("");
     const [loginError, setLoginError] = (0, import_react.useState)("");
     const [screen, setScreen] = (0, import_react.useState)("node");
-    const [selectedCfaId, setSelectedCfaId] = (0, import_react.useState)(null);
+
     const [currentNode, setCurrentNode] = (0, import_react.useState)(null);
     const [overrides, setOverrides] = (0, import_react.useState)({});
     const [loading, setLoading] = (0, import_react.useState)(true);
@@ -13247,72 +13408,6 @@
         } else {
           setSaveStatus("idle");
         }
-      } catch (e) {
-        setSaveStatus("idle");
-      }
-    };
-    const breadcrumb = (0, import_react.useMemo)(() => {
-      if (!currentNode || !loginNode) return [];
-      const full = ancestorChain(currentNode);
-      const idx = full.indexOf(loginNode);
-      return idx >= 0 ? full.slice(idx) : full;
-    }, [currentNode, loginNode]);
-    const cfaRollup = (0, import_react.useMemo)(() => {
-      if (screen !== "cfa" || !loginNode) return { byCfa: [], grand: { sysVal: 0, effVal: 0 } };
-      const lines = computeNodeLines(loginNode, overrides);
-      const byCfaMap = {};
-      lines.forEach((v, key) => {
-        const price = DATA.linePrices[key] || 0;
-        if (!byCfaMap[v.cfaId]) byCfaMap[v.cfaId] = { cfaId: v.cfaId, label: DATA.cfas[v.cfaId] || v.cfaId, sysVal: 0, effVal: 0, sysQty: 0, effQty: 0, products: [] };
-        const b = byCfaMap[v.cfaId];
-        b.sysVal += v.systemQty * price;
-        b.effVal += v.qty * price;
-        b.sysQty += v.systemQty;
-        b.effQty += v.qty;
-        b.products.push({ prodCode: v.prodCode, prodName: DATA.prods[v.prodCode] || v.prodCode, sysQty: v.systemQty, effQty: v.qty, price, overridden: v.overridden });
-      });
-      const byCfa = Object.values(byCfaMap).sort((a, b) => b.effVal - a.effVal);
-      byCfa.forEach((b) => b.products.sort((a, c) => c.effQty - a.effQty));
-      const grand = byCfa.reduce((acc, b) => ({ sysVal: acc.sysVal + b.sysVal, effVal: acc.effVal + b.effVal }), { sysVal: 0, effVal: 0 });
-      return { byCfa, grand };
-    }, [screen, overrides, loginNode]);
-    if (!authChecked) {
-      return /* @__PURE__ */ import_react.default.createElement("div", { className: "p-10 text-center text-sm text-slate-400", style: { fontFamily: "system-ui, sans-serif" } }, "Loading...");
-    }
-    if (!loginNode) {
-      return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: "system-ui, sans-serif" }, className: "max-w-sm mx-auto p-6 pt-16" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-medium text-emerald-700 tracking-wide uppercase mb-1" }, "Sales forecasting"), /* @__PURE__ */ import_react.default.createElement("h1", { className: "text-2xl font-semibold text-slate-900 mb-1" }, "Sign in"), /* @__PURE__ */ import_react.default.createElement("p", { className: "text-sm text-slate-500 mb-6" }, "Enter your login code to see your own sales and forecast."), /* @__PURE__ */ import_react.default.createElement(
-        "input",
-        {
-          value: loginInput,
-          onChange: (e) => {
-            setLoginInput(e.target.value);
-            setLoginError("");
-          },
-          onKeyDown: (e) => {
-            if (e.key === "Enter") doLogin();
-          },
-          placeholder: "Login code",
-          autoFocus: true,
-          className: "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-2 tracking-wider uppercase"
-        }
-      ), loginError && /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-rose-600 mb-2" }, loginError), /* @__PURE__ */ import_react.default.createElement("button", { onClick: doLogin, className: "w-full bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-emerald-800 transition" }, "Sign in"), /* @__PURE__ */ import_react.default.createElement("p", { className: "text-xs text-slate-400 mt-4" }, "Don't have a code? Ask your manager \\u2014 it was issued when this tool was set up."));
-    }
-    if (screen === "cfa") {
-      const selected = cfaRollup.byCfa.find((c) => c.cfaId === selectedCfaId);
-      return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: "system-ui, sans-serif" }, className: "max-w-4xl mx-auto p-4 sm:p-6" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => {
-        setScreen("node");
-        setCurrentNode(loginNode);
-        setSelectedCfaId(null);
-      }, className: "text-xs text-slate-400 hover:text-slate-600" }, "\u2190 Back to my dashboard")), /* @__PURE__ */ import_react.default.createElement("div", { className: "mb-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-medium text-emerald-700 tracking-wide uppercase mb-1" }, "Aug'26 forecast"), /* @__PURE__ */ import_react.default.createElement("h1", { className: "text-xl font-semibold text-slate-900" }, "Final forecast by CFA (distributor)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Fully resolved: reflects every override entered anywhere in the manager hierarchy")), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-2 gap-3 mb-5" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-slate-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-slate-500 mb-0.5" }, "System baseline (all depots)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-slate-800" }, fmtINR(cfaRollup.grand.sysVal))), /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-emerald-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-emerald-700 mb-0.5" }, "Final consensus total"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-emerald-800" }, fmtINR(cfaRollup.grand.effVal)))), !selected ? /* @__PURE__ */ import_react.default.createElement("div", { className: "border border-slate-200 rounded-xl overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "w-full text-sm" }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", { className: "bg-slate-50 text-[11px] uppercase text-slate-500 text-left" }, /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "CFA depot"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "System fcst"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Final total"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Variance"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }))), /* @__PURE__ */ import_react.default.createElement("tbody", { className: "divide-y divide-slate-100" }, cfaRollup.byCfa.map((c) => {
-        const variance = pctVariance(c.effVal, c.sysVal);
-        return /* @__PURE__ */ import_react.default.createElement("tr", { key: c.cfaId, className: "hover:bg-slate-50/60 cursor-pointer", onClick: () => setSelectedCfaId(c.cfaId) }, /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-slate-800 font-medium" }, c.label), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-500" }, fmtINR(c.sysVal)), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-800 font-medium" }, fmtINR(c.effVal)), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right" }, /* @__PURE__ */ import_react.default.createElement("span", { className: `text-xs font-medium ${variance > 0 ? "text-emerald-600" : variance < 0 ? "text-rose-600" : "text-slate-400"}` }, variance > 0 ? "+" : "", variance.toFixed(0), "%")), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-300" }, "\u203A"));
-      })))) : /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => setSelectedCfaId(null), className: "text-xs text-emerald-700 hover:underline mb-3" }, "\u2190 All depots"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-sm font-semibold text-slate-800 mb-3" }, selected.label), /* @__PURE__ */ import_react.default.createElement("div", { className: "border border-slate-200 rounded-xl overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "w-full text-sm" }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", { className: "bg-slate-50 text-[11px] uppercase text-slate-500 text-left" }, /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "Product"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "System fcst (units)"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Final (units)"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Value"))), /* @__PURE__ */ import_react.default.createElement("tbody", { className: "divide-y divide-slate-100" }, selected.products.map((p) => /* @__PURE__ */ import_react.default.createElement("tr", { key: p.prodCode, className: "hover:bg-slate-50/60" }, /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-slate-800" }, p.prodName), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-500" }, fmtInt(p.sysQty)), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-800" }, fmtInt(p.effQty), p.overridden && /* @__PURE__ */ import_react.default.createElement("span", { className: "ml-1 text-amber-500" }, "*")), /* @__PURE__ */ import_react.default.createElement("td", { className: "px-3 py-2 text-right text-slate-600" }, fmtINR(p.effQty * p.price)))))))));
-    }
-    const node = DATA.nodes[currentNode];
-      const exportCSV = () => {
-    let csv = "Product,CFA,Avg 1yr,Avg 3mo,Last Month,Same Month LY,System Fcst,Your Fcst,Variance,Reason,Final Value\n";
-    rows.forEach(r => {
-      const d = draft[r.key] || {};
       const val = d.qty !== void 0 && d.qty !== "" ? Number(d.qty) : r.effectiveQty;
       const variance = pctVariance(val, r.systemQty).toFixed(2);
       const cfaStr = (r.cfaLabel.split(" - ")[1] || r.cfaLabel).replace(/,/g, '');
@@ -13330,7 +13425,7 @@
     window.URL.revokeObjectURL(url);
   };
 const isTop = node && node.lvl === "VP";
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: "system-ui, sans-serif" }, className: "max-w-5xl mx-auto p-4 sm:p-6" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, currentNode !== loginNode && /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => openNode(loginNode), className: "text-xs text-slate-400 hover:text-slate-600" }, "\u2190 My dashboard"), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => setScreen("cfa"), className: "text-xs text-emerald-700 hover:underline" }, "By CFA \u203A")), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, loading && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-xs text-slate-400" }, "Loading team data..."), /* @__PURE__ */ import_react.default.createElement("button", { onClick: doLogout, className: "text-xs text-slate-400 hover:text-slate-600" }, "Log out"))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-slate-400 mb-2 flex flex-wrap gap-1 items-center" }, breadcrumb.map((code, i) => /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, { key: code }, i > 0 && /* @__PURE__ */ import_react.default.createElement("span", null, "/"), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => openNode(code), className: `hover:underline ${code === currentNode ? "text-slate-700 font-medium" : ""}` }, nodeLabel(code))))), /* @__PURE__ */ import_react.default.createElement("div", { className: "mb-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-medium text-emerald-700 tracking-wide uppercase mb-1" }, LEVEL_LABELS[node.lvl], " ", isTop ? "\u2014 last manager, sees everyone's total" : ""), /* @__PURE__ */ import_react.default.createElement("h1", { className: "text-xl font-semibold text-slate-900" }, nodeLabel(currentNode))), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-3 gap-3 mb-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-slate-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-slate-500 mb-0.5" }, "System baseline (whole team)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-slate-800" }, fmtINR(totals.sysVal))), /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-emerald-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-emerald-700 mb-0.5" }, "Current total (incl. team overrides)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-emerald-800" }, fmtINR(totals.effVal))), /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-amber-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-amber-700 mb-0.5" }, "Your draft (unsaved)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-amber-800" }, Object.keys(draft).length ? fmtINR(totals.draftVal) : "\u2014"))), childStatus.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "mb-4 border border-slate-200 rounded-xl p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-semibold text-slate-700 mb-2" }, "Your team (", childStatus.filter((c) => c.hasAnyBelow).length, "/", childStatus.length, " have entered numbers)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-1.5" }, childStatus.map((c) => /* @__PURE__ */ import_react.default.createElement("button", { key: c.code, onClick: () => openNode(c.code), className: "flex items-center justify-between text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-slate-700" }, c.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-xs text-slate-500" }, fmtINR(c.val)), c.hasAnyBelow ? /* @__PURE__ */ import_react.default.createElement(Badge, { tone: "green" }, "reviewed") : /* @__PURE__ */ import_react.default.createElement(Badge, { tone: "gray" }, "pending")))))), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-2 mb-3 items-center" }, /* @__PURE__ */ import_react.default.createElement("input", { value: rowSearch, onChange: (e) => setRowSearch(e.target.value), placeholder: "Search product...", className: "border border-slate-200 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[160px]" }), isTop && /* @__PURE__ */ import_react.default.createElement("button", { onClick: exportCSV, className: "ml-2 bg-slate-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-slate-800 transition" }, "Download in Excel"), /* @__PURE__ */ import_react.default.createElement("button", { onClick: saveNode, disabled: saveStatus === "saving" || Object.keys(draft).length === 0, className: "ml-auto bg-emerald-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-emerald-800 transition disabled:opacity-40" }, saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : isTop ? "Submit final numbers" : "Submit my numbers")), /* @__PURE__ */ import_react.default.createElement("div", { className: "border border-slate-200 rounded-xl overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "w-full text-sm" }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", { className: "bg-slate-50 text-[11px] uppercase text-slate-500 text-left" }, /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "Product"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "CFA"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Avg sale, last 1yr"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Avg sale, last 3mo"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Last month's sale"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Same month last yr"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "System fcst"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Your fcst (units)"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Variance"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "Reason (if >20%)"))), /* @__PURE__ */ import_react.default.createElement("tbody", { className: "divide-y divide-slate-100" }, rows.map((r) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: "system-ui, sans-serif" }, className: "max-w-5xl mx-auto p-4 sm:p-6" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, currentNode !== loginNode && /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => openNode(loginNode), className: "text-xs text-slate-400 hover:text-slate-600" }, "\u2190 My dashboard")), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-3" }, loading && /* @__PURE__ */ import_react.default.createElement("span", { className: "text-xs text-slate-400" }, "Loading team data..."), /* @__PURE__ */ import_react.default.createElement("button", { onClick: doLogout, className: "text-xs text-slate-400 hover:text-slate-600" }, "Log out"))), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-slate-400 mb-2 flex flex-wrap gap-1 items-center" }, breadcrumb.map((code, i) => /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, { key: code }, i > 0 && /* @__PURE__ */ import_react.default.createElement("span", null, "/"), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => openNode(code), className: `hover:underline ${code === currentNode ? "text-slate-700 font-medium" : ""}` }, nodeLabel(code))))), /* @__PURE__ */ import_react.default.createElement("div", { className: "mb-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-medium text-emerald-700 tracking-wide uppercase mb-1" }, LEVEL_LABELS[node.lvl], " ", isTop ? "\u2014 last manager, sees everyone's total" : ""), /* @__PURE__ */ import_react.default.createElement("h1", { className: "text-xl font-semibold text-slate-900" }, nodeLabel(currentNode))), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-3 gap-3 mb-4" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-slate-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-slate-500 mb-0.5" }, "System baseline (whole team)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-slate-800" }, fmtINR(totals.sysVal))), /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-emerald-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-emerald-700 mb-0.5" }, "Current total (incl. team overrides)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-emerald-800" }, fmtINR(totals.effVal))), /* @__PURE__ */ import_react.default.createElement("div", { className: "bg-amber-50 rounded-lg p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-[11px] text-amber-700 mb-0.5" }, "Your draft (unsaved)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "text-base font-semibold text-amber-800" }, Object.keys(draft).length ? fmtINR(totals.draftVal) : "\u2014"))), childStatus.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { className: "mb-4 border border-slate-200 rounded-xl p-3" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs font-semibold text-slate-700 mb-2" }, "Your team (", childStatus.filter((c) => c.hasAnyBelow).length, "/", childStatus.length, " have entered numbers)"), /* @__PURE__ */ import_react.default.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-1.5" }, childStatus.map((c) => /* @__PURE__ */ import_react.default.createElement("button", { key: c.code, onClick: () => openNode(c.code), className: "flex items-center justify-between text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "text-xs text-slate-700" }, c.name), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "text-xs text-slate-500" }, fmtINR(c.val)), c.hasAnyBelow ? /* @__PURE__ */ import_react.default.createElement(Badge, { tone: "green" }, "reviewed") : /* @__PURE__ */ import_react.default.createElement(Badge, { tone: "gray" }, "pending")))))), /* @__PURE__ */ import_react.default.createElement("div", { className: "flex flex-wrap gap-2 mb-3 items-center" }, /* @__PURE__ */ import_react.default.createElement("input", { value: rowSearch, onChange: (e) => setRowSearch(e.target.value), placeholder: "Search product...", className: "border border-slate-200 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[160px]" }), isTop && /* @__PURE__ */ import_react.default.createElement("button", { onClick: exportCSV, className: "ml-2 bg-slate-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-slate-800 transition" }, "Download in Excel"), /* @__PURE__ */ import_react.default.createElement("button", { onClick: saveNode, disabled: saveStatus === "saving" || Object.keys(draft).length === 0, className: "ml-auto bg-emerald-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-emerald-800 transition disabled:opacity-40" }, saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : isTop ? "Submit final numbers" : "Submit my numbers")), /* @__PURE__ */ import_react.default.createElement("div", { className: "border border-slate-200 rounded-xl overflow-hidden" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "w-full text-sm" }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", { className: "bg-slate-50 text-[11px] uppercase text-slate-500 text-left" }, /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "Product"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "CFA"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Avg sale, last 1yr"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Avg sale, last 3mo"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Last month's sale"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Same month last yr"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "System fcst"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Your fcst (units)"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium text-right" }, "Variance"), /* @__PURE__ */ import_react.default.createElement("th", { className: "px-3 py-2 font-medium" }, "Reason (if >20%)"))), /* @__PURE__ */ import_react.default.createElement("tbody", { className: "divide-y divide-slate-100" }, rows.map((r) => {
       const d = draft[r.key] || {};
       const val = d.qty !== void 0 && d.qty !== "" ? Number(d.qty) : r.effectiveQty;
       const variance = pctVariance(val, r.systemQty);

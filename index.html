@@ -339,7 +339,7 @@ function renderShell(tab){
         <button id="navDash" class="${tab==='dashboard'?'active':''}">Dashboard</button>
         <button id="navIncentive" class="${tab==='incentive'?'active':''}">BE Incentives</button>
         <button id="navStock" class="${tab==='stock'?'active':''}">Stock Statement</button>
-        ${session.designation === 'MANAGER' || session.designation === 'ADMIN' ? `<button id="navForecast" class="${tab==='forecast'?'active':''}">CFA Forecast</button>` : ""}
+
         ${canAdmin ? `<button id="navAdmin" class="${tab==='admin'?'active':''}">Admin Upload</button>` : ""}
         <button id="navLogout">Logout</button>
       </nav>
@@ -349,7 +349,7 @@ function renderShell(tab){
   document.getElementById("navDash").onclick = () => renderShell('dashboard');
   if (document.getElementById("navIncentive")) document.getElementById("navIncentive").onclick = () => renderShell('incentive');
   document.getElementById("navStock").onclick = () => renderShell('stock');
-  if (document.getElementById("navForecast")) document.getElementById("navForecast").onclick = () => renderShell('forecast');
+
   if (canAdmin) document.getElementById("navAdmin").onclick = () => renderShell('admin');
   document.getElementById("navLogout").onclick = logout;
 
