@@ -12884,17 +12884,44 @@
       };
       buildChildren(DATA.nodes["VP"], "VP");
 
-      // 2. Override Paid Units for "Last Month" using MR level exact mapping
+      // 2. Override Paid Units for "Last Month" with proportional CFA distribution
+      const appCfaTotals = {};
+      const appLeafCounts = {};
+      Object.values(LEAF_BY_OWNER).forEach(list => {
+        list.forEach(v => {
+          const cfaCode = v.cfaId;
+          const prodCode = v.prodCode;
+          if (!appCfaTotals[cfaCode]) appCfaTotals[cfaCode] = {};
+          if (!appCfaTotals[cfaCode][prodCode]) appCfaTotals[cfaCode][prodCode] = 0;
+          appCfaTotals[cfaCode][prodCode] += (v.hist && v.hist.length > 0) ? v.hist[v.hist.length - 1] : 0;
+          
+          if (!appLeafCounts[cfaCode]) appLeafCounts[cfaCode] = {};
+          if (!appLeafCounts[cfaCode][prodCode]) appLeafCounts[cfaCode][prodCode] = 0;
+          appLeafCounts[cfaCode][prodCode]++;
+        });
+      });
+
       Object.entries(LEAF_BY_OWNER).forEach(([ownerNode, list]) => { 
         list.forEach(v => {
+          const cfaCode = v.cfaId;
           const prodCode = v.prodCode;
           if (v.hist && v.hist.length > 0) {
-            if (overlay.leafUnits && overlay.leafUnits[ownerNode] && overlay.leafUnits[ownerNode][prodCode] !== undefined) {
-              v.hist[v.hist.length - 1] = overlay.leafUnits[ownerNode][prodCode];
+            if (overlay.units && overlay.units[cfaCode] && overlay.units[cfaCode][prodCode] !== undefined) {
+              const liveTotal = overlay.units[cfaCode][prodCode];
+              const appTotal = appCfaTotals[cfaCode][prodCode];
+              const oldVal = v.hist[v.hist.length - 1] || 0;
+
+              if (appTotal > 0) {
+                v.hist[v.hist.length - 1] = Math.round(oldVal * (liveTotal / appTotal));
+              } else if (liveTotal > 0) {
+                const count = appLeafCounts[cfaCode][prodCode] || 1;
+                v.hist[v.hist.length - 1] = Math.round(liveTotal / count);
+              } else {
+                v.hist[v.hist.length - 1] = 0;
+              }
             } else {
-              // If overlay exists but this ASM didn't sell this product, it should technically be 0, 
-              // BUT to prevent wiping out data if live data is incomplete, we only wipe it if leafUnits exists for this MR.
-              if (overlay.leafUnits && overlay.leafUnits[ownerNode]) {
+              // Not in live data
+              if (overlay.units && overlay.units[cfaCode]) {
                 v.hist[v.hist.length - 1] = 0;
               }
             }

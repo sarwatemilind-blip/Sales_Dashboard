@@ -2568,7 +2568,7 @@ async function loadStockStatementData(){
     stats.rate = stats.units > 0 ? (stats.value / stats.units) : stats.rate;
     historicalProductRateMap.set(productKey, stats);
   });
-  currentSales.forEach(r => {
+  previousMonthSales.forEach(r => {
     const stockistCode = normalizeEmpId(r.stockist_code);
     const productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
     const key = `${stockistCode}|${productCode}`;
@@ -2607,7 +2607,7 @@ async function loadStockStatementData(){
 
   window.generateForecastOverlay = function() {
     const payload = { units: {}, hierarchy: {} };
-    if (!currentSales || !allDownlineEmployees) return payload;
+    if (!previousMonthSales || !allDownlineEmployees) return payload;
 
     const vpNode = { label: "VP", lvl: "VP", children: {} };
 
