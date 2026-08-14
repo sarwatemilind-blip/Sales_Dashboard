@@ -12773,7 +12773,7 @@
   async function fetchAndReload() {
     try {
       const sb = window.parent && window.parent.sb;
-      if (!sb) { console.warn('No parent Supabase client'); return; }
+      if (!sb) { console.warn('[CFA] No parent Supabase client'); return; }
       const url = sb.supabaseUrl;
       const key = sb.supabaseKey;
       const h = { 'apikey': key, 'Authorization': 'Bearer ' + key };
@@ -12806,37 +12806,21 @@
         sOff += d.length;
       }
 
-      // 4. Build HQ-level sales histogram
+      // 4. Aggregate: hq_code -> prodCode -> hist[0..11] from live DB
       const idxOf = (y, m) => (parseInt(y) * 12 + parseInt(m)) - (2025 * 12 + 8);
-      const beRows = {};
+      const hqProdHist = {};
       for (const s of allSales) {
         if (s.canonical_product_code === 'EXPIRY' || s.brand === 'HYGIENE_EXPIRY') continue;
         const sm = smMap[s.stockist_code];
         if (!sm || !sm.hq_code) continue;
-        const k = sm.hq_code + '|' + s.canonical_product_code;
-        if (!beRows[k]) beRows[k] = { hq: sm.hq_code, cfa: sm.distributor_name || 'UNKNOWN', prod: s.canonical_product_code, hist: new Array(12).fill(0) };
         const idx = idxOf(s.period_year, s.period_month);
-        if (idx >= 0 && idx < 12) beRows[k].hist[idx] += Number(s.quantity) || 0;
+        if (idx < 0 || idx >= 12) continue;
+        if (!hqProdHist[sm.hq_code]) hqProdHist[sm.hq_code] = {};
+        if (!hqProdHist[sm.hq_code][s.canonical_product_code]) hqProdHist[sm.hq_code][s.canonical_product_code] = new Array(12).fill(0);
+        hqProdHist[sm.hq_code][s.canonical_product_code][idx] += Number(s.quantity) || 0;
       }
 
-      // 5. Map HQs to employee nodes
-      const newRecords = [];
-      let nid = 1;
-      const hqSet = [...new Set(Object.keys(beRows).map(k => k.split('|')[0]))];
-      for (const hq of hqSet) {
-        let emp = empData.find(e => e.hq_code === hq && e.designation === 'BE')
-                || empData.find(e => e.hq_code === hq && e.designation === 'ASM')
-                || empData.find(e => e.hq_code === hq && e.designation === 'RSM');
-        if (!emp) continue;
-        const owner = emp.designation + '::' + emp.emp_id;
-        const prods = Object.keys(beRows).filter(k => k.startsWith(hq + '|')).map(k => beRows[k]);
-        for (const p of prods) {
-          if (p.hist.reduce((a, b) => a + b, 0) <= 0) continue;
-          newRecords.push([nid++, owner, p.cfa, p.prod, p.hist, 0, 0, null, null]);
-        }
-      }
-
-      // 6. Build nodes from employees
+      // 5. Build live nodes with correct name/login fields
       const newNodes = {};
       empData.forEach(e => {
         const code = e.designation + '::' + e.emp_id;
@@ -12845,34 +12829,49 @@
           const pEmp = empData.find(x => x.emp_id === e.manager_emp_id);
           if (pEmp) parent = pEmp.designation + '::' + pEmp.emp_id;
         }
-        newNodes[code] = { lvl: e.designation, label: (e.name || '') + ' (' + e.emp_id + ')', parent };
+        newNodes[code] = { lvl: e.designation, name: e.name || '', label: (e.name || '') + ' (' + e.emp_id + ')', parent, login: e.emp_id };
       });
-
-      // 7. Replace DATA in-place so React re-renders
       DATA.nodes = newNodes;
-      DATA.records = newRecords;
 
-      // 8. Rebuild indexes
+      // 6. Rebuild CHILDREN
       Object.keys(CHILDREN).forEach(k => delete CHILDREN[k]);
       Object.keys(DATA.nodes).forEach(code => {
         const p = DATA.nodes[code].parent;
         if (p) { if (!CHILDREN[p]) CHILDREN[p] = []; CHILDREN[p].push(code); }
       });
-      Object.keys(LEAF_BY_OWNER).forEach(k => delete LEAF_BY_OWNER[k]);
-      DATA.records.forEach(r => {
-        const [, ownerNode, cfaId, prodCode, hist, , forecastQty, method, mape] = r;
-        if (!LEAF_BY_OWNER[ownerNode]) LEAF_BY_OWNER[ownerNode] = [];
-        LEAF_BY_OWNER[ownerNode].push({ cfaId, prodCode, hist, forecastQty, method, mape });
+
+      // 7. Update VP_ID and LOGIN_TO_NODE (module-level vars)
+      VP_ID = Object.keys(DATA.nodes).find(k => DATA.nodes[k].lvl === 'VP');
+      Object.keys(LOGIN_TO_NODE).forEach(k => delete LOGIN_TO_NODE[k]);
+      Object.keys(DATA.nodes).forEach(code => {
+        const login = DATA.nodes[code].login;
+        if (login) LOGIN_TO_NODE[login.toUpperCase()] = code;
       });
 
-      // 9. Trigger re-render by dispatching a custom event
-      // Force React to re-render with the new data
+      // 8. Build owner -> hq_code map
+      const ownerToHq = {};
+      empData.forEach(e => { if (e.hq_code) ownerToHq[e.designation + '::' + e.emp_id] = e.hq_code; });
+
+      // 9. PATCH hist in existing LEAF_BY_OWNER records with live DB data
+      //    This preserves cfaId, forecastQty, method, mape from static records
+      //    while replacing all 12 hist months with accurate DB values
+      let patched = 0;
+      Object.entries(LEAF_BY_OWNER).forEach(([ownerNode, list]) => {
+        const hq = ownerToHq[ownerNode];
+        if (!hq || !hqProdHist[hq]) return;
+        list.forEach(v => {
+          const liveHist = hqProdHist[hq][v.prodCode];
+          if (liveHist) {
+            for (let i = 0; i < 12; i++) v.hist[i] = liveHist[i] || 0;
+            patched++;
+          }
+        });
+      });
+
+      // 10. Force React to re-render with patched hist data
       if (window._cfaRoot && window._cfaApp) {
         window._cfaRoot.render(import_react.default.createElement(window._cfaApp, null));
-        console.log('[CFA] Dynamic data loaded and React re-rendered:', newRecords.length, 'records');
-      } else {
-        window.dispatchEvent(new CustomEvent('dataRefreshed'));
-        console.log('[CFA] Dynamic data loaded:', newRecords.length, 'records');
+        console.log('[CFA] Live DB data patched. Rows patched:', patched, '| HQs in DB:', Object.keys(hqProdHist).length);
       }
     } catch (err) {
       console.error('[CFA] fetchAndReload error:', err);
