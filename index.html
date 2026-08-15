@@ -356,7 +356,6 @@ function renderShell(tab){
   if (tab === 'dashboard') renderDashboard();
   else if (tab === 'stock') renderStockStatement();
   else if (tab === 'incentive') renderIncentive();
-  else if (tab === 'forecast') renderForecast();
   else if (tab === 'admin' && canAdmin) renderAdmin();
   else if (tab === 'admin') renderDashboard();
 }
@@ -2606,59 +2605,6 @@ async function loadStockStatementData(){
 
   window.productRateMap = currentProductRateMap;
 
-  window.generateForecastOverlay = function() {
-    const payload = { units: {}, hierarchy: {} };
-    if (!previousMonthSales || !allDownlineEmployees) return payload;
-
-    const vpNode = { label: "VP", lvl: "VP", children: {} };
-
-    previousMonthSales.forEach(r => {
-      const cfaCode = (r.distributor_code || "").toString().trim().padStart(3, '0');
-      if (!cfaCode) return;
-      const prodCode = (r.canonical_product_code || r.raw_product_code || "").toString().trim();
-      const sanitizedBrand = (r.brand || "").toString().trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/_$/, '').toUpperCase();
-      const qty = parseFloat(r.quantity) || 0;
-
-      let { asm, rsm, zsm } = getHierarchyNames(r.mr_emp_id);
-      if (asm === '-') asm = 'Unknown ASM';
-      if (rsm === '-') rsm = 'Unknown RSM';
-      if (zsm === '-') zsm = 'Unknown ZSM';
-
-      if (!vpNode.children[zsm]) vpNode.children[zsm] = { label: zsm, lvl: "ZSM", children: {} };
-      if (!vpNode.children[zsm].children[rsm]) vpNode.children[zsm].children[rsm] = { label: rsm, lvl: "RSM", children: {} };
-      if (!vpNode.children[zsm].children[rsm].children[asm]) vpNode.children[zsm].children[rsm].children[asm] = { label: asm, lvl: "ASM", children: {} };
-      if (!vpNode.children[zsm].children[rsm].children[asm].children[cfaCode]) {
-        vpNode.children[zsm].children[rsm].children[asm].children[cfaCode] = { label: cfaCode, lvl: "CFA", children: {} };
-      }
-
-      if (!payload.units[cfaCode]) payload.units[cfaCode] = {};
-      if (!payload.units[cfaCode][prodCode]) payload.units[cfaCode][prodCode] = 0;
-      payload.units[cfaCode][prodCode] += qty;
-      
-      if (sanitizedBrand && sanitizedBrand !== prodCode) {
-        if (!payload.units[cfaCode][sanitizedBrand]) payload.units[cfaCode][sanitizedBrand] = 0;
-        payload.units[cfaCode][sanitizedBrand] += qty;
-      }
-
-      // Add leaf-level units (ASM level) to prevent multiplication issues
-      if (!payload.leafUnits) payload.leafUnits = {};
-      const mrId = "ASM::" + (r.mr_emp_id || "");
-      if (!payload.leafUnits[mrId]) payload.leafUnits[mrId] = {};
-      
-      if (!payload.leafUnits[mrId][prodCode]) payload.leafUnits[mrId][prodCode] = 0;
-      payload.leafUnits[mrId][prodCode] += qty;
-
-      if (sanitizedBrand && sanitizedBrand !== prodCode) {
-        if (!payload.leafUnits[mrId][sanitizedBrand]) payload.leafUnits[mrId][sanitizedBrand] = 0;
-        payload.leafUnits[mrId][sanitizedBrand] += qty;
-      }
-    });
-
-    payload.hierarchy["VP"] = vpNode;
-    return payload;
-  };
-
-
   let stockistCatalog = visibleStockistList;
 
   // Dynamically append any unmapped products found in sales so they are not dropped from the Stock Statement!
@@ -3229,16 +3175,6 @@ async function handleExpiryUpload(e) {
     }
   };
   reader.readAsArrayBuffer(file);
-}
-
-function renderForecast() {
-  const body = document.getElementById("main");
-  const iframeSrc = `sales_forecast_app_9.html?emp_id=${encodeURIComponent(session.emp_id)}&cb=${new Date().getTime()}`;
-  body.innerHTML = `
-    <div style="padding: 15px; height: calc(100vh - 65px);">
-      <iframe src="${iframeSrc}" style="width:100%; height:100%; border:none; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></iframe>
-    </div>
-  `;
 }
 
 function renderAdmin(){
