@@ -150,32 +150,41 @@ create index if not exists idx_stock_statement_items_stockist on stock_statement
 create or replace view sales_attributed as
 select
   s.id as sale_id, s.period_year, s.period_month, s.bill_date,
-  s.stockist_code, s.hq_code, s.hq_name, s.brand, s.canonical_product_code,
+  s.stockist_code, coalesce(nullif(trim(m.hq_code),''), s.hq_code) as hq_code, coalesce(nullif(trim(m.hq_name),''), s.hq_name) as hq_name, s.brand, s.canonical_product_code,
   be.emp_id as be_emp_id,
-  s.quantity / be.n as quantity, s.amount / be.n as amount
+  s.quantity * be.share as quantity, s.amount * be.share as amount
 from sales s
-join stockist_mapping m on m.stockist_code = s.stockist_code
-cross join lateral (
-  -- If BEs exist, split among them. Otherwise fall back to ASM → RSM → ZM → VP.
-  select emp_id, count(*) over () as n from (
-    select nullif(trim(emp_id), '') as emp_id from (
-      -- Case 1: at least one BE is assigned — use BE(s)
-      select unnest(array[m.be_emp_id_1, m.be_emp_id_2, m.be_emp_id_3]) as emp_id
-      where coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is not null
-      union all
-      -- Case 2: no BE — fall back to lowest available level
-      select coalesce(
-        nullif(trim(m.asm_emp_id),''),
-        nullif(trim(m.rsm_emp_id),''),
-        nullif(trim(m.zm_emp_id),''),
-        nullif(trim(m.vp_emp_id),'')
-      ) as emp_id
-      where coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is null
-    ) u
-    where nullif(trim(emp_id), '') is not null
-  ) t
-) be;
-
+left join stockist_mapping m on m.stockist_code = s.stockist_code
+left join lateral (
+  select emp_id, share from (
+    select 'ADLA102'::text as emp_id, 0.20::numeric as share where s.stockist_code = 'C0563'
+    union all
+    select 'ADLA105'::text as emp_id, 0.20::numeric as share where s.stockist_code = 'C0563'
+    union all
+    select 'ADLA_INST'::text as emp_id, 0.60::numeric as share where s.stockist_code = 'C0563'
+    union all
+    -- If BEs exist, split among them. Otherwise fall back to ASM -> RSM -> ZM -> VP.
+    select emp_id, 1.0 / count(*) over () as share from (
+      select nullif(trim(emp_id), '') as emp_id from (
+        -- Case 1: at least one BE is assigned - use BE(s)
+        select unnest(array_remove(array[m.be_emp_id_1, m.be_emp_id_2, m.be_emp_id_3], null)) as emp_id
+        where s.stockist_code <> 'C0563'
+          and coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is not null
+        union all
+        -- Case 2: no BE - fall back to lowest available level
+        select coalesce(
+          nullif(trim(m.asm_emp_id),''),
+          nullif(trim(m.rsm_emp_id),''),
+          nullif(trim(m.zm_emp_id),''),
+          nullif(trim(m.vp_emp_id),'')
+        ) as emp_id
+        where s.stockist_code <> 'C0563'
+          and coalesce(nullif(trim(m.be_emp_id_1),''), nullif(trim(m.be_emp_id_2),''), nullif(trim(m.be_emp_id_3),'')) is null
+      ) u
+      where nullif(trim(emp_id), '') is not null
+    ) t
+  ) split_rows
+) be on true;
 -- =============================================================
 -- RECURSIVE HELPER: all subordinate emp_ids (inclusive) for a given manager
 -- =============================================================
