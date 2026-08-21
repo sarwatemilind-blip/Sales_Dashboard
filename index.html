@@ -3256,12 +3256,24 @@ async function renderForecast() {
     const pYear = parseInt(document.getElementById('fcYear').value, 10);
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
 
-    // Fetch products
-    const { data: products } = await sb.from('products').select('*');
-    if (!products) {
-      ws.innerHTML = `<div class="err">Failed to load products.</div>`;
+    // Fetch unique products from targets table
+    const { data: rawTargets, error: prodErr } = await sb.from('targets').select('product_code, brand').eq('year', pYear);
+    if (prodErr || !rawTargets) {
+      ws.innerHTML = `<div class="err">Failed to load products: ${prodErr?.message || 'Unknown error'}</div>`;
       return;
     }
+    
+    const products = [];
+    const seen = new Set();
+    rawTargets.forEach(r => {
+      if (!seen.has(r.product_code)) {
+        seen.add(r.product_code);
+        products.push({ product_code: r.product_code, product_name: r.brand });
+      }
+    });
+    
+    // Sort products alphabetically by name
+    products.sort((a, b) => a.product_name.localeCompare(b.product_name));
 
     // Historical math boundaries
     const prevMonth = pMonth === 1 ? 12 : pMonth - 1;
