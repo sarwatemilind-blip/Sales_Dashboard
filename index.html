@@ -6248,13 +6248,56 @@ window.exportCfaForecast = async function() {
        }
     });
 
-    const csvRows = [["CFA / Distributor Name", "Manager ID", "Manager Name", "Designation", "Product Code", "Product Name", "Forecasted Units"]];
+    const pivot = {};
+    const asmNames = new Set();
+    const rsmNames = new Set();
+
     forecasts.forEach(f => {
        const distName = managerToDistributor[f.emp_id] || "HQ / Consolidated";
        const pName = prodMap[f.product_code] || f.product_code;
-       const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : "Unknown";
-       const empDes = empMap[f.emp_id] ? empMap[f.emp_id].designation : "Unknown";
-       csvRows.push([`"${distName}"`, `"${f.emp_id}"`, `"${empName}"`, `"${empDes}"`, `"${f.product_code}"`, `"${pName}"`, f.forecast_units]);
+       const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id;
+       const empDes = empMap[f.emp_id] ? empMap[f.emp_id].designation : "";
+
+       if (empDes === 'ASM') asmNames.add(empName);
+       else rsmNames.add(empName);
+
+       const rowKey = distName + "|||" + f.product_code + "|||" + pName;
+       if (!pivot[rowKey]) {
+          pivot[rowKey] = { cfa: distName, pCode: f.product_code, pName: pName, vals: {} };
+       }
+       pivot[rowKey].vals[empName] = parseFloat(f.forecast_units||0);
+    });
+
+    const asms = Array.from(asmNames).sort();
+    const rsms = Array.from(rsmNames).sort();
+    
+    // Build Headers: CFA, Product Code, Product Name, [ASMs...], [RSMs...], Total
+    let headers = ["CFA / Distributor Name", "Product Code", "Product Name", ...asms, ...rsms];
+    if (rsms.length === 0) {
+        headers.push("Total"); // fallback if no RSMs exist to act as the total
+    }
+    const csvRows = [headers];
+
+    // Build Rows
+    Object.values(pivot).forEach(row => {
+       const r = [`"${row.cfa}"`, `"${row.pCode}"`, `"${row.pName}"`];
+       let rowSum = 0;
+       
+       asms.forEach(asm => {
+          const val = row.vals[asm] || 0;
+          r.push(val);
+          rowSum += val;
+       });
+       
+       if (rsms.length > 0) {
+           rsms.forEach(rsm => {
+              const val = row.vals[rsm];
+              r.push(val !== undefined ? val : rowSum); 
+           });
+       } else {
+           r.push(rowSum);
+       }
+       csvRows.push(r);
     });
 
     const csvContent = csvRows.map(e => e.join(",")).join("\n");
