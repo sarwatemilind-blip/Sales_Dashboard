@@ -6307,49 +6307,40 @@ window.loadCfaSummary = async function() {
     const empMap = {}; (employees||[]).forEach(e => empMap[e.emp_id] = e);
     const prodMap = {}; (products||[]).forEach(p => prodMap[p.product_code] = p.brand);
 
-    // Grouping
-    const cfaGroup = {};
-    forecasts.forEach(f => {
-      const cfa = managerToDistributor[f.emp_id] || "Unknown CFA";
-      const pName = prodMap[f.product_code] || f.product_code;
-      const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id;
-      
-      if (!cfaGroup[cfa]) cfaGroup[cfa] = { total: 0, products: {} };
-      if (!cfaGroup[cfa].products[pName]) cfaGroup[cfa].products[pName] = { total: 0, rsms: {} };
-      
-      cfaGroup[cfa].total += parseFloat(f.forecast_units||0);
-      cfaGroup[cfa].products[pName].total += parseFloat(f.forecast_units||0);
-      
-      if (!cfaGroup[cfa].products[pName].rsms[empName]) cfaGroup[cfa].products[pName].rsms[empName] = 0;
-      cfaGroup[cfa].products[pName].rsms[empName] += parseFloat(f.forecast_units||0);
-    });
-
     let html = `<table class="stock-table" style="width:100%; min-width:800px; font-size:12px;">
       <thead>
         <tr>
-          <th>CFA / Distributor</th>
-          <th>Product</th>
-          <th>Contributing Managers (RSMs/ASMs)</th>
+          <th style="text-align:left;">CFA / Distributor</th>
+          <th style="text-align:left;">Product</th>
+          <th style="text-align:left;">Manager (RSM/ASM)</th>
           <th class="num">Total Units</th>
         </tr>
       </thead>
       <tbody>`;
     
-    Object.keys(cfaGroup).sort().forEach(cfa => {
-      const pKeys = Object.keys(cfaGroup[cfa].products).sort();
-      pKeys.forEach((p, idx) => {
-        const prod = cfaGroup[cfa].products[p];
-        const rsmStr = Object.keys(prod.rsms).map(r => `${r} (${prod.rsms[r]})`).join(', ');
-        
-        html += `<tr>`;
-        if (idx === 0) {
-          html += `<td rowspan="${pKeys.length}" style="vertical-align:top; font-weight:700; background:#f8fafc;">${cfa} <br><span class="muted" style="font-weight:400;">Total: ${cfaGroup[cfa].total}</span></td>`;
-        }
-        html += `<td style="font-weight:600;">${p}</td>
-          <td style="color:var(--muted);">${rsmStr}</td>
-          <td class="num" style="font-weight:700; color:var(--brand);">${prod.total}</td>
-        </tr>`;
-      });
+    // Sort forecasts by CFA Name, then Product Name
+    const flatRows = forecasts.map(f => {
+      return {
+        cfa: managerToDistributor[f.emp_id] || "Unknown CFA",
+        prod: prodMap[f.product_code] || f.product_code,
+        mgr: empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id,
+        units: parseFloat(f.forecast_units||0)
+      };
+    });
+
+    flatRows.sort((a, b) => {
+      if (a.cfa !== b.cfa) return a.cfa.localeCompare(b.cfa);
+      if (a.prod !== b.prod) return a.prod.localeCompare(b.prod);
+      return a.mgr.localeCompare(b.mgr);
+    });
+
+    flatRows.forEach(r => {
+      html += `<tr>
+        <td style="font-weight:600; background:#f8fafc;">${r.cfa}</td>
+        <td style="font-weight:600;">${r.prod}</td>
+        <td style="color:var(--muted);">${r.mgr}</td>
+        <td class="num" style="font-weight:700; color:var(--brand);">${r.units.toLocaleString()}</td>
+      </tr>`;
     });
     
     html += `</tbody></table>`;
