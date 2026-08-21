@@ -3366,7 +3366,7 @@ async function renderForecast() {
           let from = 0;
           while (true) {
               const { data, error } = await sb.from('sales_attributed')
-                  .select('canonical_product_code, period_year, period_month, quantity')
+                  .select('canonical_product_code, period_year, period_month, quantity, brand')
                   .in('be_emp_id', beIds)
                   .in('period_year', [pYear, pYear-1, pYear-2])
                   .range(from, from + 999);
@@ -3380,6 +3380,8 @@ async function renderForecast() {
       
       const histMap = {}; // product_code -> { ly: 0, lm: 0, avgSum: 0 }
       (rawSales).forEach(s => {
+         // EXCLUDE free goods and hygiene rows for CFA Historical quantity
+         if ((s.brand || '').endsWith('(FREE)') || s.brand === 'HYGIENE_EXPIRY') return;
          const p = s.canonical_product_code;
          if (!histMap[p]) histMap[p] = { ly: 0, lm: 0, avgSum: 0 };
          
@@ -3395,6 +3397,10 @@ async function renderForecast() {
 
       // Render the Worksheet
       let html = `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:15px 20px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-weight:700; font-size:14px; color:var(--text);">Overall Forecast Value</div>
+        <div id="fcTotalValue" style="font-size:18px; font-weight:800; color:var(--brand);">₹0</div>
+      </div>
       <table class="stock-table" style="width:100%; min-width:900px; font-size:13px;">
         <thead>
           <tr>
@@ -3446,7 +3452,7 @@ async function renderForecast() {
             <td class="num" style="color:var(--muted);">${avg.toLocaleString()}</td>
             <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">${suggestion.toLocaleString()}</td>
             ${showTeamCol ? `<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">${team}</td>` : ''}
-            <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
+            <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" class="fc-input" data-pcode="${p.product_code}" oninput="recalcForecastValue()" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
           </tr>
         `;
         html += drillHtml;
@@ -3456,8 +3462,22 @@ async function renderForecast() {
     html += `</tbody></table>`;
     ws.innerHTML = html;
     btnSave.style.display = 'block';
+    
+    window.recalcForecastValue = function() {
+        const inputs = document.querySelectorAll('.fc-input');
+        let totalValue = 0;
+        inputs.forEach(inp => {
+            const pcode = inp.getAttribute('data-pcode');
+            const val = parseFloat(inp.value) || 0;
+            const rate = window.currentFcRateMap && window.currentFcRateMap[pcode] ? window.currentFcRateMap[pcode] : 0;
+            totalValue += (val * rate);
+        });
+        const el = document.getElementById('fcTotalValue');
+        if (el) el.textContent = '₹' + Math.round(totalValue).toLocaleString('en-IN');
+    };
+    window.recalcForecastValue();
   };
-
+  
   window.saveForecast = async function() {
     const btnSave = document.getElementById('btnSaveForecast');
     btnSave.textContent = "Saving...";
