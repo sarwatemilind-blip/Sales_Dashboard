@@ -6208,12 +6208,6 @@ window.exportIncentives = async function() {
   }
 };
 
-</script>
-</body>
-
-</html>
-
-
 window.exportCfaForecast = async function() {
   const btn = document.getElementById('btnExportCfa');
   btn.textContent = "Generating...";
@@ -6256,7 +6250,7 @@ window.exportCfaForecast = async function() {
        const pName = prodMap[f.product_code] || f.product_code;
        const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : "Unknown";
        const empDes = empMap[f.emp_id] ? empMap[f.emp_id].designation : "Unknown";
-       csvRows.push([\"\"\, \"\"\, \"\"\, \"\"\, \"\"\, \"\"\, f.forecast_units]);
+       csvRows.push([`"${distName}"`, `"${f.emp_id}"`, `"${empName}"`, `"${empDes}"`, `"${f.product_code}"`, `"${pName}"`, f.forecast_units]);
     });
 
     const csvContent = csvRows.map(e => e.join(",")).join("\\n");
@@ -6264,7 +6258,7 @@ window.exportCfaForecast = async function() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", \CFA_Forecast_\_\.csv\);
+    link.setAttribute("download", `CFA_Forecast_${eYear}_${eMonth}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -6277,3 +6271,8 @@ window.exportCfaForecast = async function() {
   btn.textContent = "Download CSV";
   btn.disabled = false;
 };
+
+</script>
+</body>
+
+</html>
