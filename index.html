@@ -3392,7 +3392,7 @@ async function renderForecast() {
             <th class="num" style="color:var(--muted);">Last Month Sale</th>
             <th class="num" style="color:var(--muted);">3-Month Avg</th>
             <th class="num" style="color:var(--brand); background:#f0fdf4;">System Suggestion</th>
-            ${showTeamCol ? \`<th class="num" style="background:#fff7ed; color:#9a3412;">Team Submission</th>\` : ''}
+            ${showTeamCol ? `<th class="num" style="background:#fff7ed; color:#9a3412;">Team Submission</th>` : ''}
             <th class="num" style="width:140px;">MANAGER FINAL</th>
           </tr>
         </thead>
@@ -3412,32 +3412,32 @@ async function renderForecast() {
         let btnHtml = '';
         let drillHtml = '';
         if (showTeamCol && pDetails.length > 0) {
-          btnHtml = \`<button onclick="document.getElementById('drill_\${p.product_code}').style.display = document.getElementById('drill_\${p.product_code}').style.display === 'none' ? 'table-row' : 'none';" style="background:var(--brand); color:#fff; border:none; border-radius:4px; padding:2px 6px; margin-right:8px; cursor:pointer; font-weight:700; font-size:12px;">+</button>\`;
+          btnHtml = `<button onclick="document.getElementById('drill_${p.product_code}').style.display = document.getElementById('drill_${p.product_code}').style.display === 'none' ? 'table-row' : 'none';" style="background:var(--brand); color:#fff; border:none; border-radius:4px; padding:2px 6px; margin-right:8px; cursor:pointer; font-weight:700; font-size:12px;">+</button>`;
           
-          const drillRows = pDetails.map(d => \`<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #e2e8f0; font-size:11px;"><span>↳ \${d.name}</span><span style="font-weight:700; color:var(--brand-dk);">\${parseFloat(d.qty).toLocaleString()}</span></div>\`).join('');
+          const drillRows = pDetails.map(d => `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #e2e8f0; font-size:11px;"><span>↳ ${d.name}</span><span style="font-weight:700; color:var(--brand-dk);">${parseFloat(d.qty).toLocaleString()}</span></div>`).join('');
           
-          drillHtml = \`
-          <tr id="drill_\${p.product_code}" style="display:none; background:#f8fafc;">
-            <td colspan="\${showTeamCol ? 7 : 6}" style="padding:10px 20px;">
+          drillHtml = `
+          <tr id="drill_${p.product_code}" style="display:none; background:#f8fafc;">
+            <td colspan="${showTeamCol ? 7 : 6}" style="padding:10px 20px;">
               <div style="max-width:340px; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
                 <div style="font-weight:700; margin-bottom:6px; font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:0.5px;">Team Breakdown</div>
-                \${drillRows}
+                ${drillRows}
               </div>
             </td>
-          </tr>\`;
+          </tr>`;
         }
         
-        html += \`
+        html += `
           <tr>
-            <td style="font-weight:600; vertical-align:middle;">\${btnHtml}\${p.product_name} <br><span style="font-weight:400; color:var(--muted); font-size:11px; margin-left:\${btnHtml ? '28px' : '0'};">(\${p.product_code})</span></td>
-            <td class="num" style="color:var(--muted);">\${ly.toLocaleString()}</td>
-            <td class="num" style="color:var(--muted);">\${lm.toLocaleString()}</td>
-            <td class="num" style="color:var(--muted);">\${avg.toLocaleString()}</td>
-            <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">\${suggestion.toLocaleString()}</td>
-            \${showTeamCol ? \`<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">\${team}</td>\` : ''}
-            <td class="num" style="padding:4px;"><input type="number" id="fc_\${p.product_code}" value="\${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
+            <td style="font-weight:600; vertical-align:middle;">${btnHtml}${p.product_name} <br><span style="font-weight:400; color:var(--muted); font-size:11px; margin-left:${btnHtml ? '28px' : '0'};">(${p.product_code})</span></td>
+            <td class="num" style="color:var(--muted);">${ly.toLocaleString()}</td>
+            <td class="num" style="color:var(--muted);">${lm.toLocaleString()}</td>
+            <td class="num" style="color:var(--muted);">${avg.toLocaleString()}</td>
+            <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">${suggestion.toLocaleString()}</td>
+            ${showTeamCol ? `<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">${team}</td>` : ''}
+            <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
           </tr>
-        \`;
+        `;
         html += drillHtml;
       });
 
