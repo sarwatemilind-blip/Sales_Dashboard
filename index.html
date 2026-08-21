@@ -3077,7 +3077,7 @@ async function handleExpiryUpload(e) {
   const pYear = parseInt(document.getElementById("expiryYear").value, 10);
   const pMonth = parseInt(document.getElementById("expiryMonth").value, 10);
   
-  const status = document.getElementById("adminStatus");
+  const status = document.getElementById("expiryUpStatus");
   status.style.display = 'block';
   status.textContent = "Reading Expiry file...";
   
@@ -3122,8 +3122,8 @@ async function handleExpiryUpload(e) {
       }
       
       const out = [];
-      const pYear = parseInt(document.getElementById('uploadYear').value, 10);
-      const pMonth = parseInt(document.getElementById('uploadMonth').value, 10);
+      // Use pYear and pMonth from the outer scope (which read from expiryYear and expiryMonth)
+
       
       for (const sCode in stockistAgg) {
         out.push({
@@ -3146,6 +3146,7 @@ async function handleExpiryUpload(e) {
         return;
       }
       
+      const progBar = document.getElementById("expiryProgBar");
       progBar.style.width = '70%';
       status.textContent = "Clearing existing expiry for selected period...";
       
@@ -3247,6 +3248,8 @@ function renderAdmin(){
         </select>
       </div>
       <input type="file" id="expiryFileInput" accept=".csv,.xlsx,.xls">
+      <div class="progress"><div id="expiryProgBar"></div></div>
+      <div id="expiryUpStatus" class="small"></div>
     </div>
     <div class="upload-box" style="margin-top:20px;">
       <div class="section-title" style="margin-top:0;">Upload Targets</div>
@@ -5663,7 +5666,7 @@ async function renderIncentive() {
   const targetMultiplier = await (async () => {
     let mul = 1.0;
     try {
-      const { data } = await sb.from('users').select('designation').eq('emp_id', beEmpId).single();
+      const { data } = await sb.from('employees').select('designation').eq('emp_id', beEmpId).single();
       if (data && data.designation === 'TSE') mul = 1.1; // Only TSE gets 10% hike
     } catch(e){}
     return mul;
