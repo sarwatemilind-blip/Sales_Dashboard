@@ -3569,7 +3569,11 @@ function renderAdmin(){
           </select>
         </div>
       </div>
-      <button id="btnExportCfa" class="btn-primary" onclick="exportCfaForecast()" style="background:var(--brand);">Download CSV</button>
+      <div class="row" style="margin-top:14px; gap:10px;">
+        <button id="btnLoadCfaSummary" class="btn" onclick="loadCfaSummary()" style="width:auto; padding:8px 22px;">View Summary Table</button>
+        <button id="btnExportCfa" class="btn-primary" onclick="exportCfaForecast()" style="background:var(--brand); width:auto; padding:8px 22px;">Download CSV</button>
+      </div>
+      <div id="cfaSummaryTable" style="margin-top:15px; overflow-x:auto;"></div>
     </div>
   `;
   document.getElementById("fileInput").onchange = handleUpload;
@@ -6253,7 +6257,7 @@ window.exportCfaForecast = async function() {
        csvRows.push([`"${distName}"`, `"${f.emp_id}"`, `"${empName}"`, `"${empDes}"`, `"${f.product_code}"`, `"${pName}"`, f.forecast_units]);
     });
 
-    const csvContent = csvRows.map(e => e.join(",")).join("\\n");
+    const csvContent = csvRows.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -6270,6 +6274,90 @@ window.exportCfaForecast = async function() {
 
   btn.textContent = "Download CSV";
   btn.disabled = false;
+};
+
+
+window.loadCfaSummary = async function() {
+  const container = document.getElementById('cfaSummaryTable');
+  const btn = document.getElementById('btnLoadCfaSummary');
+  btn.textContent = "Loading...";
+  container.innerHTML = "Loading data...";
+
+  const eMonth = parseInt(document.getElementById('exportCfaMonth').value, 10);
+  const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
+
+  try {
+    const { data: forecasts } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth);
+    if (!forecasts || forecasts.length === 0) {
+      container.innerHTML = "<div class='muted'>No forecasts submitted for this period.</div>";
+      btn.textContent = "View Summary Table";
+      return;
+    }
+    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_name, asm_emp_id, rsm_emp_id');
+    const { data: products } = await sb.from('targets').select('product_code, brand').eq('year', eYear);
+    const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
+
+    const managerToDistributor = {};
+    (mappings||[]).forEach(m => {
+       if (m.distributor_name) {
+         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = m.distributor_name;
+         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = m.distributor_name;
+       }
+    });
+    const empMap = {}; (employees||[]).forEach(e => empMap[e.emp_id] = e);
+    const prodMap = {}; (products||[]).forEach(p => prodMap[p.product_code] = p.brand);
+
+    // Grouping
+    const cfaGroup = {};
+    forecasts.forEach(f => {
+      const cfa = managerToDistributor[f.emp_id] || "Unknown CFA";
+      const pName = prodMap[f.product_code] || f.product_code;
+      const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id;
+      
+      if (!cfaGroup[cfa]) cfaGroup[cfa] = { total: 0, products: {} };
+      if (!cfaGroup[cfa].products[pName]) cfaGroup[cfa].products[pName] = { total: 0, rsms: {} };
+      
+      cfaGroup[cfa].total += parseFloat(f.forecast_units||0);
+      cfaGroup[cfa].products[pName].total += parseFloat(f.forecast_units||0);
+      
+      if (!cfaGroup[cfa].products[pName].rsms[empName]) cfaGroup[cfa].products[pName].rsms[empName] = 0;
+      cfaGroup[cfa].products[pName].rsms[empName] += parseFloat(f.forecast_units||0);
+    });
+
+    let html = `<table class="stock-table" style="width:100%; min-width:800px; font-size:12px;">
+      <thead>
+        <tr>
+          <th>CFA / Distributor</th>
+          <th>Product</th>
+          <th>Contributing Managers (RSMs/ASMs)</th>
+          <th class="num">Total Units</th>
+        </tr>
+      </thead>
+      <tbody>`;
+    
+    Object.keys(cfaGroup).sort().forEach(cfa => {
+      const pKeys = Object.keys(cfaGroup[cfa].products).sort();
+      pKeys.forEach((p, idx) => {
+        const prod = cfaGroup[cfa].products[p];
+        const rsmStr = Object.keys(prod.rsms).map(r => `${r} (${prod.rsms[r]})`).join(', ');
+        
+        html += `<tr>`;
+        if (idx === 0) {
+          html += `<td rowspan="${pKeys.length}" style="vertical-align:top; font-weight:700; background:#f8fafc;">${cfa} <br><span class="muted" style="font-weight:400;">Total: ${cfaGroup[cfa].total}</span></td>`;
+        }
+        html += `<td style="font-weight:600;">${p}</td>
+          <td style="color:var(--muted);">${rsmStr}</td>
+          <td class="num" style="font-weight:700; color:var(--brand);">${prod.total}</td>
+        </tr>`;
+      });
+    });
+    
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = "<div class='err'>Error loading summary: " + e.message + "</div>";
+  }
+  btn.textContent = "View Summary Table";
 };
 
 </script>
