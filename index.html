@@ -3283,18 +3283,40 @@ async function renderForecast() {
     // (In a full app, this would use the manager's downline scope. Here we fetch the user's specific roll-up)
     
     // Check if team members submitted anything
-    const { data: teamSubmissions } = await sb.from('cfa_forecasts')
-      .select('emp_id, forecast_units')
-      .eq('period_year', pYear)
-      .eq('period_month', pMonth);
-      // Ideally we filter by ASMs reporting to this manager, but this is a structural demo
+    const { data: teamEmps } = await sb.from('employees').select('emp_id, name, designation').eq('manager_emp_id', session.emp_id);
+    let teamHtml = `<table class="stock-table" style="width:100%; max-width:600px;">
+      <thead><tr><th>Team Member</th><th class="num">Status</th><th class="num">Total Units Forecasted</th></tr></thead>
+      <tbody>`;
     
-    ts.innerHTML = `<table class="stock-table" style="width:100%; max-width:600px;">
-      <thead><tr><th>Team Member (Emp ID)</th><th class="num">Status</th><th class="num">Total Units Forecasted</th></tr></thead>
-      <tbody>
-        <tr><td>Sample ASM Data</td><td class="num"><span class="score-chip">Pending</span></td><td class="num">-</td></tr>
-      </tbody>
-    </table>`;
+    let totalTeamUnits = 0;
+    const teamSubMap = {}; // store product-level roll-ups
+
+    if (!teamEmps || teamEmps.length === 0) {
+      teamHtml += `<tr><td colspan="3" style="color:var(--muted); text-align:center;">No direct team members found.</td></tr>`;
+    } else {
+      const teamIds = teamEmps.map(e => e.emp_id);
+      const { data: teamSubmissions } = await sb.from('cfa_forecasts')
+        .select('emp_id, forecast_units, product_code')
+        .eq('period_year', pYear)
+        .eq('period_month', pMonth)
+        .in('emp_id', teamIds);
+      
+      const subTotals = {};
+      (teamSubmissions || []).forEach(s => {
+        subTotals[s.emp_id] = (subTotals[s.emp_id] || 0) + parseFloat(s.forecast_units || 0);
+        teamSubMap[s.product_code] = (teamSubMap[s.product_code] || 0) + parseFloat(s.forecast_units || 0);
+        totalTeamUnits += parseFloat(s.forecast_units || 0);
+      });
+
+      teamEmps.forEach(emp => {
+        const hasSubmitted = subTotals.hasOwnProperty(emp.emp_id);
+        const uTotal = hasSubmitted ? subTotals[emp.emp_id] : 0;
+        const statusChip = hasSubmitted ? `<span class="score-chip" style="background:#dcfce7; color:#166534;">Submitted</span>` : `<span class="score-chip" style="background:#fef2f2; color:#991b1b;">Pending</span>`;
+        teamHtml += `<tr><td>${emp.name} <span style="color:var(--muted); font-size:11px;">(${emp.emp_id} - ${emp.designation})</span></td><td class="num">${statusChip}</td><td class="num">${hasSubmitted ? uTotal.toLocaleString() : '-'}</td></tr>`;
+      });
+    }
+    teamHtml += `</tbody></table>`;
+    ts.innerHTML = teamHtml;
 
     // Render the Worksheet
     let html = `
@@ -3313,12 +3335,14 @@ async function renderForecast() {
       <tbody>`;
     
     products.forEach(p => {
-      // Dummy historical data calculation for the structural demo
+      // Dummy historical data calculation (for LM/LY/Avg) until full pipeline is connected
       const ly = Math.floor(Math.random() * 500);
       const lm = Math.floor(Math.random() * 600);
       const avg = Math.floor((ly + lm + Math.random() * 400) / 3);
       const suggestion = Math.max(ly, avg);
-      const team = suggestion; // assume team defaults to suggestion
+      
+      // Pull real team submission data!
+      const team = teamSubMap[p.product_code] || 0;
       
       html += `
         <tr>
@@ -3328,7 +3352,7 @@ async function renderForecast() {
           <td class="num" style="color:var(--muted);">${avg}</td>
           <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">${suggestion}</td>
           <td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">${team}</td>
-          <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" value="${team}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
+          <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
         </tr>
       `;
     });
@@ -3343,12 +3367,50 @@ async function renderForecast() {
     btnSave.textContent = "Saving...";
     btnSave.disabled = true;
     
-    // Simulate saving
-    setTimeout(() => {
-      alert("Forecast successfully saved to cfa_forecasts table!");
+    const pYear = parseInt(document.getElementById('fcYear').value, 10);
+    const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
+    
+    // Gather all inputs
+    const inputs = document.querySelectorAll('input[id^="fc_"]');
+    const records = [];
+    inputs.forEach(inp => {
+      const pCode = inp.id.replace('fc_', '');
+      const val = parseFloat(inp.value) || 0;
+      records.push({
+        period_year: pYear,
+        period_month: pMonth,
+        emp_id: session.emp_id,
+        product_code: pCode,
+        forecast_units: val
+      });
+    });
+
+    if (records.length === 0) {
+      alert("No products to save.");
       btnSave.textContent = "Submit Final Forecast";
       btnSave.disabled = false;
-    }, 1000);
+      return;
+    }
+
+    // Delete existing forecast for this user/month to replace
+    await sb.from('cfa_forecasts')
+      .delete()
+      .eq('period_year', pYear)
+      .eq('period_month', pMonth)
+      .eq('emp_id', session.emp_id);
+
+    // Insert new
+    const { error } = await sb.from('cfa_forecasts').insert(records);
+    
+    if (error) {
+      alert("Error saving forecast: " + error.message);
+    } else {
+      alert("Forecast successfully saved to database!");
+      loadForecastData(); // Reload to refresh status
+    }
+    
+    btnSave.textContent = "Submit Final Forecast";
+    btnSave.disabled = false;
   };
   
   // Auto-load
