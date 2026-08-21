@@ -3552,6 +3552,25 @@ function renderAdmin(){
       <button id="saveHiddenStockistsBtn" class="btn" style="width:auto;padding:8px 22px;font-size:13px;">&#128274; Save Hidden Stockists</button>
       <span id="hiddenStockistStatus" class="small" style="margin-left:14px;color:var(--accent);"></span>
     </div>
+
+    <div class="upload-box" style="margin-top:20px; border:2px solid var(--brand); background:#f8fafc;">
+      <div class="section-title" style="margin-top:0;">Export CFA Forecasts</div>
+      <p class="small">Download the final submitted forecasts for Supply Chain and Logistics (grouped by CFA/Distributor and Product).</p>
+      <div class="row" style="margin:14px 0;">
+        <div>
+          <label>Forecast Month</label>
+          <select id="exportCfaMonth" style="padding:8px; border:1px solid var(--line); border-radius:6px;">${FY_MONTHS.map(m=>`<option value="${m.n}">${m.label}</option>`).join("")}</select>
+        </div>
+        <div>
+          <label>Year</label>
+          <select id="exportCfaYear" style="width:110px; padding:8px; border:1px solid var(--line); border-radius:6px;">
+            <option value="2026" selected>2026</option>
+            <option value="2027">2027</option>
+          </select>
+        </div>
+      </div>
+      <button id="btnExportCfa" class="btn-primary" onclick="exportCfaForecast()" style="background:var(--brand);">Download CSV</button>
+    </div>
   `;
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
@@ -6194,3 +6213,67 @@ window.exportIncentives = async function() {
 
 </html>
 
+
+window.exportCfaForecast = async function() {
+  const btn = document.getElementById('btnExportCfa');
+  btn.textContent = "Generating...";
+  btn.disabled = true;
+
+  const eMonth = parseInt(document.getElementById('exportCfaMonth').value, 10);
+  const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
+
+  try {
+    const { data: forecasts, error: fErr } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth);
+    if (fErr) throw fErr;
+    if (!forecasts || forecasts.length === 0) {
+      alert("No forecast data found for this period.");
+      btn.textContent = "Download CSV";
+      btn.disabled = false;
+      return;
+    }
+
+    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_name, asm_emp_id, rsm_emp_id, zm_emp_id');
+    const { data: products } = await sb.from('targets').select('product_code, brand').eq('year', eYear);
+    const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
+
+    const prodMap = {};
+    (products||[]).forEach(p => prodMap[p.product_code] = p.brand);
+    
+    const empMap = {};
+    (employees||[]).forEach(e => empMap[e.emp_id] = e);
+
+    const managerToDistributor = {};
+    (mappings||[]).forEach(m => {
+       if (m.distributor_name) {
+         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = m.distributor_name;
+         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = m.distributor_name;
+       }
+    });
+
+    const csvRows = [["CFA / Distributor Name", "Manager ID", "Manager Name", "Designation", "Product Code", "Product Name", "Forecasted Units"]];
+    forecasts.forEach(f => {
+       const distName = managerToDistributor[f.emp_id] || "HQ / Consolidated";
+       const pName = prodMap[f.product_code] || f.product_code;
+       const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : "Unknown";
+       const empDes = empMap[f.emp_id] ? empMap[f.emp_id].designation : "Unknown";
+       csvRows.push([\"\"\, \"\"\, \"\"\, \"\"\, \"\"\, \"\"\, f.forecast_units]);
+    });
+
+    const csvContent = csvRows.map(e => e.join(",")).join("\\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", \CFA_Forecast_\_\.csv\);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error(err);
+    alert("Error generating export: " + err.message);
+  }
+
+  btn.textContent = "Download CSV";
+  btn.disabled = false;
+};
