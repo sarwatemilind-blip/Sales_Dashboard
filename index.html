@@ -3092,6 +3092,7 @@ async function handleExpiryUpload(e) {
       status.textContent = "Parsing Expiry data...";
       let headerIdx = -1;
       let stockistCol = -1;
+      let altStockistCol = -1;
       let grossValCol = -1;
       
       for(let i = 0; i < Math.min(20, rows.length); i++) {
@@ -3100,20 +3101,21 @@ async function handleExpiryUpload(e) {
           headerIdx = i;
           grossValCol = row.indexOf("Gross Value");
           stockistCol = row.indexOf("Cust Erp/Sap Code");
-          if(stockistCol === -1) stockistCol = row.indexOf("Code");
+          altStockistCol = row.indexOf("Code");
+          if(stockistCol === -1) stockistCol = altStockistCol;
           break;
         }
       }
       
       if(headerIdx === -1 || stockistCol === -1 || grossValCol === -1) {
-        throw new Error("Could not find required columns ('Cust Erp/Sap Code' and 'Gross Value').");
+        throw new Error("Could not find required columns ('Cust Erp/Sap Code' / 'Code' and 'Gross Value').");
       }
       
       const stockistAgg = {};
       for(let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
-        const rawSCode = row[stockistCol] || (typeof altStockistCol !== 'undefined' && altStockistCol !== -1 ? row[altStockistCol] : "");
+        const rawSCode = row[stockistCol] || (altStockistCol !== -1 ? row[altStockistCol] : "");
         const sCode = String(rawSCode).trim();
         const val = parseFloat(row[grossValCol]);
         if (sCode && !isNaN(val)) {
