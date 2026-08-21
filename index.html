@@ -3333,64 +3333,114 @@ async function renderForecast() {
     }
     ts.innerHTML = teamHtml;
 
-    // Render the Worksheet
-    let html = `
-    <table class="stock-table" style="width:100%; min-width:900px; font-size:13px;">
-      <thead>
-        <tr>
-          <th style="text-align:left;">Product</th>
-          <th class="num" style="color:var(--muted);" title="Same month last year">LY Same Month</th>
-          <th class="num" style="color:var(--muted);">Last Month Sale</th>
-          <th class="num" style="color:var(--muted);">3-Month Avg</th>
-          <th class="num" style="color:var(--brand); background:#f0fdf4;">System Suggestion</th>
-          ${showTeamCol ? `<th class="num" style="background:#fff7ed; color:#9a3412;">Team Submission</th>` : ''}
-          <th class="num" style="width:140px;">MANAGER FINAL</th>
-        </tr>
-      </thead>
-      <tbody>`;
-    
-    products.forEach(p => {
-      // Dummy historical data calculation (for LM/LY/Avg) until full pipeline is connected
-      const ly = Math.floor(Math.random() * 500);
-      const lm = Math.floor(Math.random() * 600);
-      const avg = Math.floor((ly + lm + Math.random() * 400) / 3);
-      const suggestion = Math.max(ly, avg);
+      // ---------------- Fetch Real Historical Data ----------------
+      let lmMonth = pMonth - 1;
+      let lmYear = pYear;
+      if (lmMonth < 1) { lmMonth = 12; lmYear = pYear - 1; }
       
-      // Pull real team submission data!
-      const team = teamSubMap[p.product_code] || 0;
-      const pDetails = teamProdDetails[p.product_code] || [];
+      let lyMonth = pMonth;
+      let lyYear = pYear - 1;
+
+      // Avg covers lmMonth, lmMonth-1, lmMonth-2
+      const avgMonths = [
+        { y: lmYear, m: lmMonth },
+        { y: lmMonth - 1 < 1 ? lmYear - 1 : lmYear, m: lmMonth - 1 < 1 ? 12 : lmMonth - 1 },
+        { y: lmMonth - 2 < 1 ? lmYear - 1 : lmYear, m: lmMonth - 2 < 1 ? 12 + (lmMonth - 2) : lmMonth - 2 }
+      ];
+
+      const scopeIds = [session.emp_id];
+      let addedScope = true;
+      while (addedScope) {
+        addedScope = false;
+        allDownlineEmployees.forEach(e => {
+          if (e.manager_emp_id && scopeIds.includes(e.manager_emp_id) && !scopeIds.includes(e.emp_id)) {
+            scopeIds.push(e.emp_id);
+            addedScope = true;
+          }
+        });
+      }
+      const beIds = allDownlineEmployees.filter(e => e.designation === 'BE' && scopeIds.includes(e.emp_id)).map(e => e.emp_id);
       
-      let btnHtml = '';
-      let drillHtml = '';
-      if (showTeamCol && pDetails.length > 0) {
-        btnHtml = `<button onclick="document.getElementById('drill_${p.product_code}').style.display = document.getElementById('drill_${p.product_code}').style.display === 'none' ? 'table-row' : 'none';" style="background:var(--brand); color:#fff; border:none; border-radius:4px; padding:2px 6px; margin-right:8px; cursor:pointer; font-weight:700; font-size:12px;">+</button>`;
-        
-        const drillRows = pDetails.map(d => `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #e2e8f0; font-size:11px;"><span>↳ ${d.name}</span><span style="font-weight:700; color:var(--brand-dk);">${parseFloat(d.qty).toLocaleString()}</span></div>`).join('');
-        
-        drillHtml = `
-        <tr id="drill_${p.product_code}" style="display:none; background:#f8fafc;">
-          <td colspan="${showTeamCol ? 7 : 6}" style="padding:10px 20px;">
-            <div style="max-width:340px; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-              <div style="font-weight:700; margin-bottom:6px; font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:0.5px;">Team Breakdown</div>
-              ${drillRows}
-            </div>
-          </td>
-        </tr>`;
+      let rawSales = [];
+      if (beIds.length > 0) {
+          const { data } = await sb.from('sales_attributed').select('canonical_product_code, period_year, period_month, quantity').in('be_emp_id', beIds).in('period_year', [pYear, pYear-1, pYear-2]);
+          rawSales = data || [];
       }
       
-      html += `
-        <tr>
-          <td style="font-weight:600; vertical-align:middle;">${btnHtml}${p.product_name} <br><span style="font-weight:400; color:var(--muted); font-size:11px; margin-left:${btnHtml ? '28px' : '0'};">(${p.product_code})</span></td>
-          <td class="num" style="color:var(--muted);">${ly}</td>
-          <td class="num" style="color:var(--muted);">${lm}</td>
-          <td class="num" style="color:var(--muted);">${avg}</td>
-          <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">${suggestion}</td>
-          ${showTeamCol ? `<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">${team}</td>` : ''}
-          <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
-        </tr>
-      `;
-      html += drillHtml;
-    });
+      const histMap = {}; // product_code -> { ly: 0, lm: 0, avgSum: 0 }
+      (rawSales).forEach(s => {
+         const p = s.canonical_product_code;
+         if (!histMap[p]) histMap[p] = { ly: 0, lm: 0, avgSum: 0 };
+         
+         const isLY = (s.period_year === lyYear && s.period_month === lyMonth);
+         const isLM = (s.period_year === lmYear && s.period_month === lmMonth);
+         const isAvg = avgMonths.some(am => am.y === s.period_year && am.m === s.period_month);
+         
+         if (isLY) histMap[p].ly += parseFloat(s.quantity||0);
+         if (isLM) histMap[p].lm += parseFloat(s.quantity||0);
+         if (isAvg) histMap[p].avgSum += parseFloat(s.quantity||0);
+      });
+      // -------------------------------------------------------------
+
+      // Render the Worksheet
+      let html = `
+      <table class="stock-table" style="width:100%; min-width:900px; font-size:13px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Product</th>
+            <th class="num" style="color:var(--muted);" title="Same month last year">LY Same Month</th>
+            <th class="num" style="color:var(--muted);">Last Month Sale</th>
+            <th class="num" style="color:var(--muted);">3-Month Avg</th>
+            <th class="num" style="color:var(--brand); background:#f0fdf4;">System Suggestion</th>
+            ${showTeamCol ? \`<th class="num" style="background:#fff7ed; color:#9a3412;">Team Submission</th>\` : ''}
+            <th class="num" style="width:140px;">MANAGER FINAL</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      
+      products.forEach(p => {
+        // Real historical data calculation
+        const ly = Math.round(histMap[p.product_code]?.ly || 0);
+        const lm = Math.round(histMap[p.product_code]?.lm || 0);
+        const avg = Math.round((histMap[p.product_code]?.avgSum || 0) / 3);
+        const suggestion = Math.max(ly, avg);
+        
+        // Pull real team submission data!
+        const team = teamSubMap[p.product_code] || 0;
+        const pDetails = teamProdDetails[p.product_code] || [];
+        
+        let btnHtml = '';
+        let drillHtml = '';
+        if (showTeamCol && pDetails.length > 0) {
+          btnHtml = \`<button onclick="document.getElementById('drill_\${p.product_code}').style.display = document.getElementById('drill_\${p.product_code}').style.display === 'none' ? 'table-row' : 'none';" style="background:var(--brand); color:#fff; border:none; border-radius:4px; padding:2px 6px; margin-right:8px; cursor:pointer; font-weight:700; font-size:12px;">+</button>\`;
+          
+          const drillRows = pDetails.map(d => \`<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #e2e8f0; font-size:11px;"><span>↳ \${d.name}</span><span style="font-weight:700; color:var(--brand-dk);">\${parseFloat(d.qty).toLocaleString()}</span></div>\`).join('');
+          
+          drillHtml = \`
+          <tr id="drill_\${p.product_code}" style="display:none; background:#f8fafc;">
+            <td colspan="\${showTeamCol ? 7 : 6}" style="padding:10px 20px;">
+              <div style="max-width:340px; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                <div style="font-weight:700; margin-bottom:6px; font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:0.5px;">Team Breakdown</div>
+                \${drillRows}
+              </div>
+            </td>
+          </tr>\`;
+        }
+        
+        html += \`
+          <tr>
+            <td style="font-weight:600; vertical-align:middle;">\${btnHtml}\${p.product_name} <br><span style="font-weight:400; color:var(--muted); font-size:11px; margin-left:\${btnHtml ? '28px' : '0'};">(\${p.product_code})</span></td>
+            <td class="num" style="color:var(--muted);">\${ly.toLocaleString()}</td>
+            <td class="num" style="color:var(--muted);">\${lm.toLocaleString()}</td>
+            <td class="num" style="color:var(--muted);">\${avg.toLocaleString()}</td>
+            <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">\${suggestion.toLocaleString()}</td>
+            \${showTeamCol ? \`<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">\${team}</td>\` : ''}
+            <td class="num" style="padding:4px;"><input type="number" id="fc_\${p.product_code}" value="\${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
+          </tr>
+        \`;
+        html += drillHtml;
+      });
+
     
     html += `</tbody></table>`;
     ws.innerHTML = html;
@@ -6231,11 +6281,19 @@ window.exportCfaForecast = async function() {
     }
 
     const { data: mappings } = await sb.from('stockist_mapping').select('distributor_name, asm_emp_id, rsm_emp_id, zm_emp_id');
-    const { data: products } = await sb.from('targets').select('product_code, brand').eq('year', eYear);
+    const { data: products } = await sb.from('targets').select('product_code, brand, val_target_total, unit_target_total').eq('year', eYear);
     const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
 
     const prodMap = {};
-    (products||[]).forEach(p => prodMap[p.product_code] = p.brand);
+    const rateMap = {};
+    (products||[]).forEach(p => {
+       prodMap[p.product_code] = p.brand;
+       const v = parseFloat(p.val_target_total) || 0;
+       const u = parseFloat(p.unit_target_total) || 0;
+       if (u > 0) {
+           rateMap[p.product_code] = (v * 100000) / u;
+       }
+    });
     
     const empMap = {};
     (employees||[]).forEach(e => empMap[e.emp_id] = e);
@@ -6271,11 +6329,8 @@ window.exportCfaForecast = async function() {
     const asms = Array.from(asmNames).sort();
     const rsms = Array.from(rsmNames).sort();
     
-    // Build Headers: CFA, Product Code, Product Name, [ASMs...], [RSMs...], Total
-    let headers = ["CFA / Distributor Name", "Product Code", "Product Name", ...asms, ...rsms];
-    if (rsms.length === 0) {
-        headers.push("Total"); // fallback if no RSMs exist to act as the total
-    }
+    // Build Headers: CFA, Product Code, Product Name, [ASMs...], [RSMs...], Total Quantity, Sale Rate, Total Value
+    let headers = ["CFA / Distributor Name", "Product Code", "Product Name", ...asms, ...rsms, "Total Quantity", "Sale Rate", "Total Value"];
     const csvRows = [headers];
 
     // Build Rows
@@ -6289,14 +6344,21 @@ window.exportCfaForecast = async function() {
           rowSum += val;
        });
        
-       if (rsms.length > 0) {
-           rsms.forEach(rsm => {
-              const val = row.vals[rsm];
-              r.push(val !== undefined ? val : rowSum); 
-           });
-       } else {
-           r.push(rowSum);
-       }
+       let finalTotal = rowSum;
+       rsms.forEach(rsm => {
+          const val = row.vals[rsm];
+          const rsmVal = val !== undefined ? val : rowSum;
+          r.push(rsmVal); 
+          finalTotal = rsmVal; // The last RSM's value typically overrides as the final total
+       });
+
+       r.push(finalTotal); // Total Quantity
+
+       // Fetch sale rate from targets
+       let saleRate = rateMap[row.pCode] || 0;
+       
+       r.push(saleRate.toFixed(2)); // Sale Rate
+       r.push((finalTotal * saleRate).toFixed(2)); // Total Value
        csvRows.push(r);
     });
 
