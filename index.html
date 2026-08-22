@@ -3256,8 +3256,8 @@ async function renderForecast() {
     const pYear = parseInt(document.getElementById('fcYear').value, 10);
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
       
-      const { data: lockData } = await sb.from('cfa_forecasts').select('id').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
-      const isLocked = lockData && lockData.length > 0;
+      const { data: lockData } = await sb.from('cfa_forecasts').select('forecast_units').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      const isLocked = lockData && lockData.length > 0 && lockData[0].forecast_units === 1;
       
       // Fetch unique products from targets table
     const { data: rawTargets, error: prodErr } = await sb.from('targets').select('product_code, brand, val_target_total, unit_target_total').eq('year', pYear);
@@ -3503,8 +3503,8 @@ async function renderForecast() {
     const pYear = parseInt(document.getElementById('fcYear').value, 10);
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
       
-      const { data: lockData } = await sb.from('cfa_forecasts').select('id').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
-      if (lockData && lockData.length > 0) {
+      const { data: lockData } = await sb.from('cfa_forecasts').select('forecast_units').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      if (lockData && lockData.length > 0 && lockData[0].forecast_units === 1) {
           alert('This forecasting period has been locked by the Admin.');
           btnSave.textContent = "Submit Final Forecast";
           btnSave.disabled = false;
@@ -3695,8 +3695,9 @@ function renderAdmin(){
       const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
       const btn = document.getElementById('btnLockCfa');
       if (!btn) return;
-      const { data } = await sb.from('cfa_forecasts').select('id').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
-      if (data && data.length > 0) {
+      const { data } = await sb.from('cfa_forecasts').select('forecast_units').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      const isLocked = data && data.length > 0 && data[0].forecast_units === 1;
+      if (isLocked) {
           btn.textContent = "Unlock Period";
           btn.style.background = "#22c55e";
       } else {
@@ -3711,9 +3712,10 @@ function renderAdmin(){
       const btn = document.getElementById('btnLockCfa');
       btn.textContent = "Processing...";
       
-      const { data } = await sb.from('cfa_forecasts').select('id').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      const { data } = await sb.from('cfa_forecasts').select('id, forecast_units').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
       if (data && data.length > 0) {
-          await sb.from('cfa_forecasts').delete().eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+          const currentlyLocked = data[0].forecast_units === 1;
+          await sb.from('cfa_forecasts').update({ forecast_units: currentlyLocked ? 0 : 1 }).eq('id', data[0].id);
       } else {
           await sb.from('cfa_forecasts').insert([{ period_year: eYear, period_month: eMonth, emp_id: 'SYSTEM', product_code: 'LOCKED', forecast_units: 1 }]);
       }
