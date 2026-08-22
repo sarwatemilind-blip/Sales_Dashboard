@@ -3689,6 +3689,38 @@ function renderAdmin(){
   document.getElementById("expiryFileInput").onchange = handleExpiryUpload;
   document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
+  
+  window.checkCfaLockStatus = async function() {
+      const eMonth = parseInt(document.getElementById('exportCfaMonth').value, 10);
+      const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
+      const btn = document.getElementById('btnLockCfa');
+      if (!btn) return;
+      const { data } = await sb.from('cfa_forecasts').select('id').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      if (data && data.length > 0) {
+          btn.textContent = "Unlock Period";
+          btn.style.background = "#22c55e";
+      } else {
+          btn.textContent = "Lock Period";
+          btn.style.background = "#ef4444";
+      }
+  };
+  
+  window.toggleCfaLock = async function() {
+      const eMonth = parseInt(document.getElementById('exportCfaMonth').value, 10);
+      const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
+      const btn = document.getElementById('btnLockCfa');
+      btn.textContent = "Processing...";
+      
+      const { data } = await sb.from('cfa_forecasts').select('id').eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      if (data && data.length > 0) {
+          await sb.from('cfa_forecasts').delete().eq('period_year', eYear).eq('period_month', eMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      } else {
+          await sb.from('cfa_forecasts').insert([{ period_year: eYear, period_month: eMonth, emp_id: 'SYSTEM', product_code: 'LOCKED', forecast_units: 1 }]);
+      }
+      await window.checkCfaLockStatus();
+  };
+  
+  setTimeout(window.checkCfaLockStatus, 500);
   (async () => {
     await loadHiddenStockists();
     const { data: allSm } = await sb.from('stockist_mapping').select('stockist_code, stockist_name').order('stockist_name');
