@@ -3368,6 +3368,11 @@ async function renderForecast() {
       }
       const beIds = allDownlineEmployees.filter(e => e.designation === 'BE' && scopeIds.includes(e.emp_id)).map(e => e.emp_id);
       
+      // CFA FORECASTING CUSTOM EXCEPTION: Add ADLA70's sales to ADLA12's territory (Strictly for CFA forecasting)
+      if (scopeIds.includes('ADLA12') && !beIds.includes('ADLA70')) {
+          beIds.push('ADLA70');
+      }
+      
       let rawSales = [];
       if (beIds.length > 0) {
           let from = 0;
