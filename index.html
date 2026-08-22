@@ -3257,20 +3257,27 @@ async function renderForecast() {
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
 
     // Fetch unique products from targets table
-    const { data: rawTargets, error: prodErr } = await sb.from('targets').select('product_code, brand').eq('year', pYear);
+    const { data: rawTargets, error: prodErr } = await sb.from('targets').select('product_code, brand, val_target_total, unit_target_total').eq('year', pYear);
     if (prodErr || !rawTargets) {
       ws.innerHTML = `<div class="err">Failed to load products: ${prodErr?.message || 'Unknown error'}</div>`;
       return;
     }
     
     const products = [];
-    const seen = new Set();
-    rawTargets.forEach(r => {
-      if (!seen.has(r.product_code)) {
-        seen.add(r.product_code);
-        products.push({ product_code: r.product_code, product_name: r.brand });
-      }
-    });
+      const rateMap = {};
+      const seen = new Set();
+      rawTargets.forEach(r => {
+        if (!seen.has(r.product_code)) {
+          seen.add(r.product_code);
+          products.push({ product_code: r.product_code, product_name: r.brand });
+          
+          const v = parseFloat(r.val_target_total) || 0;
+          const u = parseFloat(r.unit_target_total) || 0;
+          if (u > 0) rateMap[r.product_code] = (v * 100000) / u;
+          else rateMap[r.product_code] = 0;
+        }
+      });
+      window.currentFcRateMap = rateMap;
     
     // Sort products alphabetically by name
     products.sort((a, b) => a.product_name.localeCompare(b.product_name));
