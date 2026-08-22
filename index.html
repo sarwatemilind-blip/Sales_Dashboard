@@ -3267,14 +3267,15 @@ async function renderForecast() {
       const rateMap = {};
       const seen = new Set();
       rawTargets.forEach(r => {
+        const v = parseFloat(r.val_target_total) || 0;
+        const u = parseFloat(r.unit_target_total) || 0;
+        if (u > 0) {
+            rateMap[r.product_code] = (v * 100000) / u;
+        }
+        
         if (!seen.has(r.product_code)) {
           seen.add(r.product_code);
           products.push({ product_code: r.product_code, product_name: r.brand });
-          
-          const v = parseFloat(r.val_target_total) || 0;
-          const u = parseFloat(r.unit_target_total) || 0;
-          if (u > 0) rateMap[r.product_code] = (v * 100000) / u;
-          else rateMap[r.product_code] = 0;
         }
       });
       window.currentFcRateMap = rateMap;
