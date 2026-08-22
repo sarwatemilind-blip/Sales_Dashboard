@@ -3255,8 +3255,11 @@ async function renderForecast() {
 
     const pYear = parseInt(document.getElementById('fcYear').value, 10);
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
-
-    // Fetch unique products from targets table
+      
+      const { data: lockData } = await sb.from('cfa_forecasts').select('id').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      const isLocked = lockData && lockData.length > 0;
+      
+      // Fetch unique products from targets table
     const { data: rawTargets, error: prodErr } = await sb.from('targets').select('product_code, brand, val_target_total, unit_target_total').eq('year', pYear);
     if (prodErr || !rawTargets) {
       ws.innerHTML = `<div class="err">Failed to load products: ${prodErr?.message || 'Unknown error'}</div>`;
@@ -3410,6 +3413,7 @@ async function renderForecast() {
 
       // Render the Worksheet
       let html = `
+      ${isLocked ? '<div style="background:#fef2f2; border:1px solid #f87171; color:#b91c1c; padding:12px 20px; border-radius:6px; margin-bottom:15px; font-weight:700; text-align:center;">⚠️ This forecast period has been locked by the Admin. You cannot make changes.</div>' : ''}
       <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:15px 20px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
         <div style="font-weight:700; font-size:14px; color:var(--text);">Overall Forecast Value</div>
         <div id="fcTotalValue" style="font-size:18px; font-weight:800; color:var(--brand);">₹0</div>
@@ -3465,7 +3469,7 @@ async function renderForecast() {
             <td class="num" style="color:var(--muted);">${avg.toLocaleString()}</td>
             <td class="num" style="color:var(--brand); font-weight:700; background:#f0fdf4;">${suggestion.toLocaleString()}</td>
             ${showTeamCol ? `<td class="num" style="font-weight:700; background:#fff7ed; color:#9a3412;">${team}</td>` : ''}
-            <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" class="fc-input" data-pcode="${p.product_code}" oninput="recalcForecastValue()" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" /></td>
+            <td class="num" style="padding:4px;"><input type="number" id="fc_${p.product_code}" class="fc-input" data-pcode="${p.product_code}" oninput="recalcForecastValue()" value="${team || suggestion}" style="width:100%; padding:6px; text-align:right; font-weight:700; border:2px solid var(--line); border-radius:6px;" ${isLocked ? 'disabled' : ''} /></td>
           </tr>
         `;
         html += drillHtml;
@@ -3498,8 +3502,16 @@ async function renderForecast() {
     
     const pYear = parseInt(document.getElementById('fcYear').value, 10);
     const pMonth = parseInt(document.getElementById('fcMonth').value, 10);
-    
-    // Gather all inputs
+      
+      const { data: lockData } = await sb.from('cfa_forecasts').select('id').eq('period_year', pYear).eq('period_month', pMonth).eq('emp_id', 'SYSTEM').eq('product_code', 'LOCKED');
+      if (lockData && lockData.length > 0) {
+          alert('This forecasting period has been locked by the Admin.');
+          btnSave.textContent = "Submit Final Forecast";
+          btnSave.disabled = false;
+          return;
+      }
+      
+      // Gather all inputs
     const inputs = document.querySelectorAll('input[id^="fc_"]');
     const records = [];
     inputs.forEach(inp => {
@@ -3653,11 +3665,11 @@ function renderAdmin(){
       <div class="row" style="margin:14px 0;">
         <div>
           <label>Forecast Month</label>
-          <select id="exportCfaMonth" style="padding:8px; border:1px solid var(--line); border-radius:6px;">${FY_MONTHS.map(m=>`<option value="${m.n}">${m.label}</option>`).join("")}</select>
+          <select id="exportCfaMonth" style="padding:8px; border:1px solid var(--line); border-radius:6px;" onchange="if(window.checkCfaLockStatus) window.checkCfaLockStatus()">${FY_MONTHS.map(m=>`<option value="${m.n}">${m.label}</option>`).join("")}</select>
         </div>
         <div>
           <label>Year</label>
-          <select id="exportCfaYear" style="width:110px; padding:8px; border:1px solid var(--line); border-radius:6px;">
+          <select id="exportCfaYear" style="width:110px; padding:8px; border:1px solid var(--line); border-radius:6px;" onchange="if(window.checkCfaLockStatus) window.checkCfaLockStatus()">
             <option value="2026" selected>2026</option>
             <option value="2027">2027</option>
           </select>
