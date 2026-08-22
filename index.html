@@ -3322,7 +3322,9 @@ async function renderForecast() {
         .select('emp_id, forecast_units, product_code')
         .eq('period_year', pYear)
         .eq('period_month', pMonth)
-        .in('emp_id', teamIds);
+        .in('emp_id', teamIds)
+        .neq('product_code', 'DELETED_TEST')
+        .neq('product_code', 'LOCKED');
       
       const subTotals = {};
       (teamSubmissions || []).forEach(s => {
@@ -6362,7 +6364,7 @@ window.exportCfaForecast = async function() {
   const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
 
   try {
-    const { data: forecasts, error: fErr } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth);
+    const { data: forecasts, error: fErr } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth).neq('product_code', 'DELETED_TEST').neq('product_code', 'LOCKED');
     if (fErr) throw fErr;
     if (!forecasts || forecasts.length === 0) {
       alert("No forecast data found for this period.");
@@ -6483,7 +6485,7 @@ window.loadCfaSummary = async function() {
   const eYear = parseInt(document.getElementById('exportCfaYear').value, 10);
 
   try {
-    const { data: forecasts } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth);
+    const { data: forecasts } = await sb.from('cfa_forecasts').select('*').eq('period_year', eYear).eq('period_month', eMonth).neq('product_code', 'DELETED_TEST').neq('product_code', 'LOCKED');
     if (!forecasts || forecasts.length === 0) {
       container.innerHTML = "<div class='muted'>No forecasts submitted for this period.</div>";
       btn.textContent = "View Summary Table";
