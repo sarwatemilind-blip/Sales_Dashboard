@@ -5449,7 +5449,7 @@ const incentiveHTML = `\n<style>
     </div>
     <div class="inc-section-body">
       <div class="inc-hygiene-note">
-        Lower expiry as a % of sales = better hygiene = higher incentive. No growth condition applies to this incentive.
+        Lower expiry as a % of sales = better hygiene = higher incentive. Must achieve 90% of target for the 4-month cycle.
       </div>
       <div class="inc-field-group">
         <div class="inc-field-row">
@@ -5770,6 +5770,9 @@ function calcHygiene() {
   let isQualifying = true;
   let qualMsg = '';
   
+  const cycleTarget = (window.buckets && window.buckets.hygieneCycle) ? window.buckets.hygieneCycle.t : 0;
+  const targetAchvPct = cycleTarget > 0 ? sales / cycleTarget : (sales > 0 ? 1 : 0);
+  
   if (currentMonth % 4 !== 0) {
     isQualifying = false;
     qualMsg = '4-month cycle not completed';
@@ -5779,6 +5782,9 @@ function calcHygiene() {
   } else if (!isExpiryEntered) {
     isQualifying = false;
     qualMsg = 'Expiry data not entered';
+  } else if (targetAchvPct < 0.90) {
+    isQualifying = false;
+    qualMsg = `Target achievement is below 90% (${(targetAchvPct * 100).toFixed(1)}%)`;
   } else {
     if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
     else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
