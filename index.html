@@ -3372,7 +3372,7 @@ async function renderForecast() {
           }
         });
       }
-      const beIds = allDownlineEmployees.filter(e => e.designation === 'BE' && scopeIds.includes(e.emp_id)).map(e => e.emp_id);
+      const beIds = [...scopeIds];
       
       // CFA FORECASTING CUSTOM EXCEPTION: Add ADLA70's sales to ADLA12's territory (Strictly for CFA forecasting)
       if (scopeIds.includes('ADLA12') && !beIds.includes('ADLA70')) {
