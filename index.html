@@ -3327,7 +3327,14 @@ async function renderForecast() {
         .neq('product_code', 'LOCKED');
       
       const subTotals = {};
+      // Deduplicate team submissions to prevent double counting if database race conditions occurred
+      const uniqueSubmissions = {};
       (teamSubmissions || []).forEach(s => {
+        uniqueSubmissions[s.emp_id + '_' + s.product_code] = s;
+      });
+      const deduplicatedSubmissions = Object.values(uniqueSubmissions);
+      
+      deduplicatedSubmissions.forEach(s => {
         subTotals[s.emp_id] = (subTotals[s.emp_id] || 0) + parseFloat(s.forecast_units || 0);
         teamSubMap[s.product_code] = (teamSubMap[s.product_code] || 0) + parseFloat(s.forecast_units || 0);
         totalTeamUnits += parseFloat(s.forecast_units || 0);
