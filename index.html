@@ -1621,11 +1621,18 @@ tgt.forEach(r => {
     const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
     const teamMap = {};
     // Normalise HQ name: strip " (Vacant BE)" so targets & achievement merge under the same key
-    (team||[]).forEach(e => teamMap[e.emp_id] = {
-      emp: e,
-      pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-      others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
-      total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+    (team||[]).forEach(e => {
+      const hNames = getHierarchyNames(e.emp_id, e.state);
+      e.asm_name = hNames.asm;
+      e.rsm_name = hNames.rsm;
+      e.zsm_name = hNames.zsm;
+      e.state = hNames.state;
+      teamMap[e.emp_id] = {
+        emp: e,
+        pillar: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+        others: { targetVal: 0, achVal: 0, lastYearVal: 0 },
+        total: { targetVal: 0, achVal: 0, lastYearVal: 0 }
+      };
     });
 
     const beBrandMap = {};
