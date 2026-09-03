@@ -6481,7 +6481,8 @@ window.exportCfaForecast = async function() {
 
     // Build Rows
     Object.values(pivot).forEach(row => {
-       const r = [`"${row.cfaCode}"`, `"${row.cfaName}"`, `"${row.cfaCity}"`, `"${row.pCode}"`, `"${row.pName}"`];
+       const codeStr = row.codes && row.codes.size > 0 ? Array.from(row.codes).join(', ') : '-';
+       const r = [`"${codeStr}"`, `"${row.cfaName}"`, `"${row.cfaCity}"`, `"${row.pCode}"`, `"${row.pName}"`];
        let rowSum = 0;
        
        asms.forEach(asm => {
@@ -6490,12 +6491,15 @@ window.exportCfaForecast = async function() {
           rowSum += (val || 0);
        });
        
-       let finalTotal = rowSum;
+       let rsmOverrideSum = 0;
+       let anyRsmSubmitted = false;
        rsms.forEach(rsm => {
           if (row.vals[rsm] !== undefined) {
-             finalTotal = row.vals[rsm]; // Capture actual RSM override
+             rsmOverrideSum += row.vals[rsm];
+             anyRsmSubmitted = true;
           }
        });
+       let finalTotal = anyRsmSubmitted ? rsmOverrideSum : rowSum;
 
        rsms.forEach(rsm => {
           const val = row.vals[rsm];
