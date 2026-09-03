@@ -6428,7 +6428,18 @@ window.exportCfaForecast = async function() {
     });
     
     const empMap = {};
-    (employees||[]).forEach(e => empMap[e.emp_id] = e);
+    const nameToRank = {};
+    (employees||[]).forEach(e => {
+        empMap[e.emp_id] = e;
+        let r = 0;
+        const d = (e.designation||'').toUpperCase();
+        if (d.includes('ADMIN')) r = 100;
+        else if (d.includes('VP')) r = 90;
+        else if (d.includes('ZSM') || d.includes('ZM')) r = 80;
+        else if (d.includes('RSM')) r = 50;
+        else if (d.includes('ASM')) r = 10;
+        nameToRank[e.name] = r;
+    });
 
     const managerToDistributor = {};
     (mappings||[]).forEach(m => {
@@ -6491,15 +6502,32 @@ window.exportCfaForecast = async function() {
           rowSum += (val || 0);
        });
        
-       let rsmOverrideSum = 0;
-       let anyRsmSubmitted = false;
+       let maxRank = 0;
+       let maxRankVal = rowSum;
+       let guwahatiSum = 0;
+       let isGuwahati = (row.cfaCity || '').toUpperCase() === "GUWAHATI";
+       
        rsms.forEach(rsm => {
           if (row.vals[rsm] !== undefined) {
-             rsmOverrideSum += row.vals[rsm];
-             anyRsmSubmitted = true;
+             const rank = nameToRank[rsm] || 50;
+             const val = row.vals[rsm];
+             
+             if (isGuwahati && (rsm.toUpperCase().includes("ANUP") || rsm.toUpperCase().includes("PRIYA"))) {
+                 guwahatiSum += val;
+                 if (50 >= maxRank) {
+                     maxRank = 50;
+                     maxRankVal = guwahatiSum;
+                 }
+             } else {
+                 if (rank >= maxRank) {
+                     maxRank = rank;
+                     maxRankVal = val;
+                 }
+             }
           }
        });
-       let finalTotal = anyRsmSubmitted ? rsmOverrideSum : rowSum;
+       
+       let finalTotal = maxRankVal;
 
        rsms.forEach(rsm => {
           const val = row.vals[rsm];
