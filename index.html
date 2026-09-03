@@ -6412,7 +6412,7 @@ window.exportCfaForecast = async function() {
       return;
     }
 
-    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_name, asm_emp_id, rsm_emp_id, zm_emp_id');
+    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_code, distributor_name, distributor_city, asm_emp_id, rsm_emp_id, zm_emp_id');
     const { data: products } = await sb.from('targets').select('product_code, brand, val_target_total, unit_target_total').eq('year', eYear);
     const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
 
@@ -6433,8 +6433,9 @@ window.exportCfaForecast = async function() {
     const managerToDistributor = {};
     (mappings||[]).forEach(m => {
        if (m.distributor_name) {
-         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = m.distributor_name;
-         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = m.distributor_name;
+         const obj = { name: m.distributor_name, code: m.distributor_code || '-', city: m.distributor_city || '-' };
+         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = obj;
+         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = obj;
        }
     });
 
@@ -6443,7 +6444,7 @@ window.exportCfaForecast = async function() {
     const rsmNames = new Set();
 
     forecasts.forEach(f => {
-       const distName = managerToDistributor[f.emp_id] || "HQ / Consolidated";
+       const cfaObj = managerToDistributor[f.emp_id] || { name: "HQ / Consolidated", code: "-", city: "-" };
        const pName = prodMap[f.product_code] || f.product_code;
        const empName = empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id;
        const empDes = empMap[f.emp_id] ? empMap[f.emp_id].designation : "";
@@ -6451,9 +6452,16 @@ window.exportCfaForecast = async function() {
        if (empDes === 'ASM') asmNames.add(empName);
        else rsmNames.add(empName);
 
-       const rowKey = distName + "|||" + f.product_code + "|||" + pName;
+       const rowKey = cfaObj.name + "|||" + cfaObj.code + "|||" + cfaObj.city + "|||" + f.product_code + "|||" + pName;
        if (!pivot[rowKey]) {
-          pivot[rowKey] = { cfa: distName, pCode: f.product_code, pName: pName, vals: {} };
+          pivot[rowKey] = { 
+             cfaName: cfaObj.name, 
+             cfaCode: cfaObj.code,
+             cfaCity: cfaObj.city,
+             pCode: f.product_code, 
+             pName: pName, 
+             vals: {} 
+          };
        }
        pivot[rowKey].vals[empName] = parseFloat(f.forecast_units||0);
     });
@@ -6462,12 +6470,12 @@ window.exportCfaForecast = async function() {
     const rsms = Array.from(rsmNames).sort();
     
     // Build Headers: CFA, Product Code, Product Name, [ASMs...], [RSMs...], Total Quantity, Sale Rate, Total Value
-    let headers = ["CFA / Distributor Name", "Product Code", "Product Name", ...asms, ...rsms, "Total Quantity", "Sale Rate", "Total Value"];
+    let headers = ["CFA / Distributor Code", "CFA / Distributor Name", "City", "Product Code", "Product Name", ...asms, ...rsms, "Total Quantity", "Sale Rate", "Total Value"];
     const csvRows = [headers];
 
     // Build Rows
     Object.values(pivot).forEach(row => {
-       const r = [`"${row.cfa}"`, `"${row.pCode}"`, `"${row.pName}"`];
+       const r = [`"${row.cfaCode}"`, `"${row.cfaName}"`, `"${row.cfaCity}"`, `"${row.pCode}"`, `"${row.pName}"`];
        let rowSum = 0;
        
        asms.forEach(asm => {
@@ -6530,15 +6538,16 @@ window.loadCfaSummary = async function() {
       btn.textContent = "View Summary Table";
       return;
     }
-    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_name, asm_emp_id, rsm_emp_id');
+    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_code, distributor_name, distributor_city, asm_emp_id, rsm_emp_id');
     const { data: products } = await sb.from('targets').select('product_code, brand').eq('year', eYear);
     const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
 
     const managerToDistributor = {};
     (mappings||[]).forEach(m => {
        if (m.distributor_name) {
-         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = m.distributor_name;
-         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = m.distributor_name;
+         const obj = { name: m.distributor_name, code: m.distributor_code || '-', city: m.distributor_city || '-' };
+         if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = obj;
+         if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = obj;
        }
     });
     const empMap = {}; (employees||[]).forEach(e => empMap[e.emp_id] = e);
@@ -6547,7 +6556,9 @@ window.loadCfaSummary = async function() {
     let html = `<table class="stock-table" style="width:100%; min-width:800px; font-size:12px;">
       <thead>
         <tr>
-          <th style="text-align:left;">CFA / Distributor</th>
+          <th style="text-align:left;">CFA / Distributor Code</th>
+          <th style="text-align:left;">CFA / Distributor Name</th>
+          <th style="text-align:left;">City</th>
           <th style="text-align:left;">Product</th>
           <th style="text-align:left;">Manager (RSM/ASM)</th>
           <th class="num">Total Units</th>
@@ -6557,8 +6568,11 @@ window.loadCfaSummary = async function() {
     
     // Sort forecasts by CFA Name, then Product Name
     const flatRows = forecasts.map(f => {
+      const cfaObj = managerToDistributor[f.emp_id] || { name: "Unknown CFA", code: "-", city: "-" };
       return {
-        cfa: managerToDistributor[f.emp_id] || "Unknown CFA",
+        cfaName: cfaObj.name,
+        cfaCode: cfaObj.code,
+        cfaCity: cfaObj.city,
         prod: prodMap[f.product_code] || f.product_code,
         mgr: empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id,
         units: parseFloat(f.forecast_units||0)
@@ -6566,14 +6580,17 @@ window.loadCfaSummary = async function() {
     });
 
     flatRows.sort((a, b) => {
-      if (a.cfa !== b.cfa) return a.cfa.localeCompare(b.cfa);
+      if (a.cfaName !== b.cfaName) return a.cfaName.localeCompare(b.cfaName);
+      if (a.cfaCity !== b.cfaCity) return a.cfaCity.localeCompare(b.cfaCity);
       if (a.prod !== b.prod) return a.prod.localeCompare(b.prod);
       return a.mgr.localeCompare(b.mgr);
     });
 
     flatRows.forEach(r => {
       html += `<tr>
-        <td style="font-weight:600; background:#f8fafc;">${r.cfa}</td>
+        <td style="font-weight:600; background:#f8fafc;">${r.cfaCode}</td>
+        <td style="font-weight:600; background:#f8fafc;">${r.cfaName}</td>
+        <td style="font-weight:600; background:#f8fafc;">${r.cfaCity}</td>
         <td style="font-weight:600;">${r.prod}</td>
         <td style="color:var(--muted);">${r.mgr}</td>
         <td class="num" style="font-weight:700; color:var(--brand);">${r.units.toLocaleString()}</td>
