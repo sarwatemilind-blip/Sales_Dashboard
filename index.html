@@ -3321,8 +3321,8 @@ async function renderForecast() {
       }
     } else {
       showTeamCol = true;
-      teamHtml = `<table class="stock-table" style="width:100%; max-width:600px;">
-        <thead><tr><th>Team Member</th><th class="num">Status</th><th class="num">Total Units Forecasted</th></tr></thead>
+      teamHtml = `<table class="stock-table" style="width:100%; max-width:750px;">
+        <thead><tr><th>Team Member</th><th class="num">Status</th><th class="num">Total Units Forecasted</th><th class="num">Total Value Forecasted</th></tr></thead>
         <tbody>`;
       const teamIds = teamEmps.map(e => e.emp_id);
       const { data: teamSubmissions } = await sb.from('cfa_forecasts')
@@ -3334,6 +3334,7 @@ async function renderForecast() {
         .neq('product_code', 'LOCKED');
       
       const subTotals = {};
+      const subValues = {};
       // Deduplicate team submissions to prevent double counting if database race conditions occurred
       const uniqueSubmissions = {};
       (teamSubmissions || []).forEach(s => {
@@ -3343,6 +3344,10 @@ async function renderForecast() {
       
       deduplicatedSubmissions.forEach(s => {
         subTotals[s.emp_id] = (subTotals[s.emp_id] || 0) + parseFloat(s.forecast_units || 0);
+        
+        const rate = window.currentFcRateMap && window.currentFcRateMap[s.product_code] ? window.currentFcRateMap[s.product_code] : 0;
+        subValues[s.emp_id] = (subValues[s.emp_id] || 0) + (parseFloat(s.forecast_units || 0) * rate);
+
         teamSubMap[s.product_code] = (teamSubMap[s.product_code] || 0) + parseFloat(s.forecast_units || 0);
         totalTeamUnits += parseFloat(s.forecast_units || 0);
         
@@ -3353,8 +3358,9 @@ async function renderForecast() {
       teamEmps.forEach(emp => {
         const hasSubmitted = subTotals.hasOwnProperty(emp.emp_id);
         const uTotal = hasSubmitted ? subTotals[emp.emp_id] : 0;
+        const vTotal = hasSubmitted ? subValues[emp.emp_id] : 0;
         const statusChip = hasSubmitted ? `<span class="score-chip" style="background:#dcfce7; color:#166534;">Submitted</span>` : `<span class="score-chip" style="background:#fef2f2; color:#991b1b;">Pending</span>`;
-        teamHtml += `<tr><td>${emp.name} <span style="color:var(--muted); font-size:11px;">(${emp.emp_id} - ${emp.designation})</span></td><td class="num">${statusChip}</td><td class="num">${hasSubmitted ? uTotal.toLocaleString() : '-'}</td></tr>`;
+        teamHtml += `<tr><td>${emp.name} <span style="color:var(--muted); font-size:11px;">(${emp.emp_id} - ${emp.designation})</span></td><td class="num">${statusChip}</td><td class="num">${hasSubmitted ? uTotal.toLocaleString('en-IN') : '-'}</td><td class="num" style="color:var(--brand);font-weight:600;">${hasSubmitted ? '₹' + Math.round(vTotal).toLocaleString('en-IN') : '-'}</td></tr>`;
       });
       teamHtml += `</tbody></table>`;
     }
