@@ -6436,6 +6436,7 @@ window.exportCfaForecast = async function() {
          const obj = { name: m.distributor_name, code: m.distributor_code || '-', city: m.distributor_city || '-' };
          if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = obj;
          if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = obj;
+         if (m.zm_emp_id && !managerToDistributor[m.zm_emp_id]) managerToDistributor[m.zm_emp_id] = obj;
        }
     });
 
@@ -6452,16 +6453,21 @@ window.exportCfaForecast = async function() {
        if (empDes === 'ASM') asmNames.add(empName);
        else rsmNames.add(empName);
 
-       const rowKey = cfaObj.name + "|||" + cfaObj.code + "|||" + cfaObj.city + "|||" + f.product_code + "|||" + pName;
+       const rowKey = cfaObj.name + "|||" + cfaObj.city + "|||" + f.product_code + "|||" + pName;
        if (!pivot[rowKey]) {
           pivot[rowKey] = { 
              cfaName: cfaObj.name, 
-             cfaCode: cfaObj.code,
+             codes: new Set(),
              cfaCity: cfaObj.city,
              pCode: f.product_code, 
              pName: pName, 
              vals: {} 
           };
+       }
+       if (cfaObj.code !== '-') {
+           let codeNum = parseInt(cfaObj.code, 10);
+           if (!isNaN(codeNum)) pivot[rowKey].codes.add(codeNum.toString());
+           else pivot[rowKey].codes.add(cfaObj.code);
        }
        pivot[rowKey].vals[empName] = parseFloat(f.forecast_units||0);
     });
@@ -6542,7 +6548,7 @@ window.loadCfaSummary = async function() {
       btn.textContent = "View Summary Table";
       return;
     }
-    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_code, distributor_name, distributor_city, asm_emp_id, rsm_emp_id');
+    const { data: mappings } = await sb.from('stockist_mapping').select('distributor_code, distributor_name, distributor_city, asm_emp_id, rsm_emp_id, zm_emp_id');
     const { data: products } = await sb.from('targets').select('product_code, brand').eq('year', eYear);
     const { data: employees } = await sb.from('employees').select('emp_id, name, designation');
 
@@ -6552,6 +6558,7 @@ window.loadCfaSummary = async function() {
          const obj = { name: m.distributor_name, code: m.distributor_code || '-', city: m.distributor_city || '-' };
          if (m.asm_emp_id) managerToDistributor[m.asm_emp_id] = obj;
          if (m.rsm_emp_id && !managerToDistributor[m.rsm_emp_id]) managerToDistributor[m.rsm_emp_id] = obj;
+         if (m.zm_emp_id && !managerToDistributor[m.zm_emp_id]) managerToDistributor[m.zm_emp_id] = obj;
        }
     });
     const empMap = {}; (employees||[]).forEach(e => empMap[e.emp_id] = e);
@@ -6570,19 +6577,26 @@ window.loadCfaSummary = async function() {
       </thead>
       <tbody>`;
     
-    // Sort forecasts by CFA Name, then Product Name
-    const flatRows = forecasts.map(f => {
+    // Group by CFA Name, City, Product, and Manager
+    const grouped = {};
+    forecasts.forEach(f => {
       const cfaObj = managerToDistributor[f.emp_id] || { name: "Unknown CFA", code: "-", city: "-" };
-      return {
-        cfaName: cfaObj.name,
-        cfaCode: cfaObj.code,
-        cfaCity: cfaObj.city,
-        prod: prodMap[f.product_code] || f.product_code,
-        mgr: empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id,
-        units: parseFloat(f.forecast_units||0)
-      };
+      const prod = prodMap[f.product_code] || f.product_code;
+      const mgr = empMap[f.emp_id] ? empMap[f.emp_id].name : f.emp_id;
+      
+      const key = cfaObj.name + "|||" + cfaObj.city + "|||" + prod + "|||" + mgr;
+      if (!grouped[key]) {
+        grouped[key] = { cfaName: cfaObj.name, codes: new Set(), cfaCity: cfaObj.city, prod: prod, mgr: mgr, units: 0 };
+      }
+      if (cfaObj.code !== '-') {
+         let codeNum = parseInt(cfaObj.code, 10);
+         if (!isNaN(codeNum)) grouped[key].codes.add(codeNum.toString());
+         else grouped[key].codes.add(cfaObj.code);
+      }
+      grouped[key].units += parseFloat(f.forecast_units||0);
     });
 
+    const flatRows = Object.values(grouped);
     flatRows.sort((a, b) => {
       if (a.cfaName !== b.cfaName) return a.cfaName.localeCompare(b.cfaName);
       if (a.cfaCity !== b.cfaCity) return a.cfaCity.localeCompare(b.cfaCity);
@@ -6591,8 +6605,9 @@ window.loadCfaSummary = async function() {
     });
 
     flatRows.forEach(r => {
+      const codeStr = r.codes.size > 0 ? Array.from(r.codes).join(', ') : '-';
       html += `<tr>
-        <td style="font-weight:600; background:#f8fafc;">${r.cfaCode}</td>
+        <td style="font-weight:600; background:#f8fafc;">${codeStr}</td>
         <td style="font-weight:600; background:#f8fafc;">${r.cfaName}</td>
         <td style="font-weight:600; background:#f8fafc;">${r.cfaCity}</td>
         <td style="font-weight:600;">${r.prod}</td>
