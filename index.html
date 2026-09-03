@@ -6479,9 +6479,9 @@ window.exportCfaForecast = async function() {
        let rowSum = 0;
        
        asms.forEach(asm => {
-          const val = row.vals[asm] || 0;
-          r.push(val);
-          rowSum += val;
+          const val = row.vals[asm];
+          r.push(val !== undefined ? val : '-');
+          rowSum += (val || 0);
        });
        
        let finalTotal = rowSum;
@@ -6493,8 +6493,7 @@ window.exportCfaForecast = async function() {
 
        rsms.forEach(rsm => {
           const val = row.vals[rsm];
-          const rsmVal = val !== undefined ? val : rowSum;
-          r.push(rsmVal); 
+          r.push(val !== undefined ? val : '-'); 
        });
 
        r.push(finalTotal); // Total Quantity
