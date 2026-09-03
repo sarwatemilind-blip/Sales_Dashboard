@@ -6450,6 +6450,11 @@ window.exportCfaForecast = async function() {
          if (m.zm_emp_id && !managerToDistributor[m.zm_emp_id]) managerToDistributor[m.zm_emp_id] = obj;
        }
     });
+    
+    // Patch for Sougata Mukherjee (ADLA20) whose mapping is missing in the database
+    if (!managerToDistributor['ADLA20']) {
+        managerToDistributor['ADLA20'] = { name: "ADONIS LABORATORIES PVT.LTD.", code: "028", city: "KOLKATA" };
+    }
 
     const pivot = {};
     const asmNames = new Set();
@@ -6593,6 +6598,11 @@ window.loadCfaSummary = async function() {
          if (m.zm_emp_id && !managerToDistributor[m.zm_emp_id]) managerToDistributor[m.zm_emp_id] = obj;
        }
     });
+    
+    // Patch for Sougata Mukherjee (ADLA20) whose mapping is missing in the database
+    if (!managerToDistributor['ADLA20']) {
+        managerToDistributor['ADLA20'] = { name: "ADONIS LABORATORIES PVT.LTD.", code: "028", city: "KOLKATA" };
+    }
     const empMap = {}; (employees||[]).forEach(e => empMap[e.emp_id] = e);
     const prodMap = {}; (products||[]).forEach(p => prodMap[p.product_code] = p.brand);
 
