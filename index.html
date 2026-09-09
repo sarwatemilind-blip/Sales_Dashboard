@@ -4086,7 +4086,7 @@ async function handleEmployeeUpload(e){
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws);
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
   if (rows.length === 0) {
     status.textContent = "The file is empty.";
@@ -4220,7 +4220,7 @@ async function handleTargetUpload(e){
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws);
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
   if (rows.length === 0) {
     status.textContent = "The file is empty.";
@@ -4362,7 +4362,7 @@ async function handleStockistMappingUpload(e){
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws);
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
   if (rows.length === 0) {
     status.textContent = "The file is empty.";
