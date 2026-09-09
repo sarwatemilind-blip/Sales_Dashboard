@@ -1,5 +1,5 @@
 emp_id,name,designation,hq_code,hq_name,manager_emp_id,state,region
-ADLA02,MILIND SARWATE,VP,S0217,Mumbai,ADLA01,Mumbai,All India
+ADLA02,MILIND SARWATE,VP,S0217,Mumbai,,Mumbai,All India
 ADMIN01,ADMIN USER,ADMIN,S0217,Mumbai,,All India,All India
 ADLA17,SURAJIT MALLICK,ZSM,S0235,Kolkata,ADLA02,WB,WB-Direct
 ADLA_INST,Institution Sales,BE,S0235,KOLKATA POOL,ADLA17,WB,WB-Direct
