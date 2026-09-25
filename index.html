@@ -1251,8 +1251,8 @@ async function renderDashboard(){
       </div>
 
       <select id="yearSel" style="margin-right: 10px;">
-        <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27</option>
-        <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26</option>
+        <option value="2026" ${currentYear===2026?'selected':''}>FY 2026-27 (Current FY — Apr-Jul 2026)</option>
+        <option value="2025" ${currentYear===2025?'selected':''}>FY 2025-26 (Last FY — Full Year Apr-Mar)</option>
       </select>
       <span class="pill" id="scopePill">${downlineIds.length} employee${downlineIds.length>1?'s':''} in scope</span>
       <button id="btnDownload" class="btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px;">Download Excel</button>
@@ -2024,7 +2024,15 @@ tgt.forEach(r => {
     mtdNote = `<div class="sub" style="font-size:11px; margin-top:2px;">Sales up to day ${elapsedDays} (Full target)</div>`;
   }
 
+  let infoBanner = "";
+  if (totalAchVal === 0 && totalLastYearVal > 0) {
+    infoBanner = `<div style="background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:13px; display:flex; align-items:center; gap:8px;">
+      <span>ℹ️</span> <span><b>No sales report uploaded for ${periodLabel} ${currentYear} yet.</b> Actual sales for ${periodLabel} ${currentYear-1} were <b>${fmtCurrency(totalLastYearVal)}</b>. Switch the Year dropdown to <b>"FY 2025-26"</b> to view last year's sales data.</span>
+    </div>`;
+  }
+
   body.innerHTML = `
+    ${infoBanner}
     <div class="kpi-row">
       <div class="kpi">
         <div class="label">Target (Value)</div>
