@@ -1531,7 +1531,7 @@ async function loadDashboardData(){
   const totalAchVal = sum(filteredAch, 'amount');
   const totalAchUnit = sum(filteredAch, 'quantity');
   const totalLastYearVal = sum(filteredLastYear, 'amount');
-  const growthVal = totalLastYearVal > 0 ? ((totalAchVal - totalLastYearVal) / totalLastYearVal * 100) : null;
+  const growthVal = (totalLastYearVal > 0 && totalAchVal > 0) ? ((totalAchVal - totalLastYearVal) / totalLastYearVal * 100) : null;
 
   // Save for Excel export
   lastDashboardData.kpis = [
@@ -2031,11 +2031,11 @@ tgt.forEach(r => {
         <div class="value">${fmtNum(totalTargetVal)}</div>
         ${mtdNote}
       </div>
-      <div class="kpi"><div class="label">Achievement (Value)</div><div class="value">${fmtNum(totalAchVal)}</div></div>
+      <div class="kpi"><div class="label">Achievement (Value)</div><div class="value">${fmtNum(totalAchVal)}</div>${totalAchVal === 0 ? '<div class="sub" style="color:var(--muted); font-size:11px;">No sales uploaded for this period</div>' : '}</div>
       <div class="kpi"><div class="label">% Achievement</div><div class="value">${totalTargetVal>0?fmtPct(totalAchVal/totalTargetVal*100):'—'}</div></div>
       <div class="kpi"><div class="label">Growth vs Last Year</div>
         <div class="value ${growthVal===null?'':(growthVal>=0?'pos':'neg')}">${growthVal===null?'—':fmtPct(growthVal)}</div>
-        <div class="sub">${growthVal===null? 'Upload FY'+(currentYear-1)+' data to enable' : 'vs ' + periodLabel + ' ' + (currentYear-1)}</div>
+        <div class="sub">${growthVal!==null ? 'vs ' + periodLabel + ' ' + (currentYear-1) : (totalLastYearVal > 0 ? 'No sales uploaded for ' + periodLabel + ' ' + currentYear : 'Upload FY'+(currentYear-1)+' data to enable')}</div>
       </div>
     </div>
 
