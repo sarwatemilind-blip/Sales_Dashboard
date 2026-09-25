@@ -1473,9 +1473,9 @@ async function loadDashboardData(){
   const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
   const [tgt, achAttr, lastYearAttr, achRaw, lastYearRaw] = await Promise.all([
-    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months, true),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months, true),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, months, true),
+    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months, !isCompanyOverall),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months, !isCompanyOverall),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, months, !isCompanyOverall),
     isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear, months, false) : Promise.resolve([]),
     isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear - 1, months, false) : Promise.resolve([])
   ]);
@@ -1618,7 +1618,7 @@ tgt.forEach(r => {
   let teamHtml = "";
   lastDashboardData.team = [];
   if (session.designation !== 'BE' && activeScopeIds.length > 1) {
-    const { data: team } = await sb.from('employees').select('*').in('emp_id', activeScopeIds).eq('designation', 'BE');
+    const team = allDownlineEmployees.filter(e => activeScopeIds.includes(e.emp_id) && e.designation === 'BE');
     const teamMap = {};
     // Normalise HQ name: strip " (Vacant BE)" so targets & achievement merge under the same key
     (team||[]).forEach(e => {
@@ -4500,9 +4500,9 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
   const [tgt, achAttr, lastYearAttr] = await Promise.all([
-    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, monthsVal, true),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, monthsVal, true),
-    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, monthsVal, true)
+    fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, monthsVal, !isCompanyOverall),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, monthsVal, !isCompanyOverall),
+    fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, monthsVal, !isCompanyOverall)
   ]);
 
   const filteredAch = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
@@ -6669,4 +6669,4 @@ window.loadCfaSummary = async function() {
 </script>
 </body>
 
-</html>
+</html>
