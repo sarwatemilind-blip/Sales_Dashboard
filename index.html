@@ -2031,7 +2031,7 @@ tgt.forEach(r => {
         <div class="value">${fmtNum(totalTargetVal)}</div>
         ${mtdNote}
       </div>
-      <div class="kpi"><div class="label">Achievement (Value)</div><div class="value">${fmtNum(totalAchVal)}</div>${totalAchVal === 0 ? '<div class="sub" style="color:var(--muted); font-size:11px;">No sales uploaded for this period</div>' : '}</div>
+      <div class="kpi"><div class="label">Achievement (Value)</div><div class="value">${fmtNum(totalAchVal)}</div>${totalAchVal === 0 ? '<div class="sub" style="color:var(--muted); font-size:11px;">No sales uploaded for this period</div>' : ''}</div>
       <div class="kpi"><div class="label">% Achievement</div><div class="value">${totalTargetVal>0?fmtPct(totalAchVal/totalTargetVal*100):'—'}</div></div>
       <div class="kpi"><div class="label">Growth vs Last Year</div>
         <div class="value ${growthVal===null?'':(growthVal>=0?'pos':'neg')}">${growthVal===null?'—':fmtPct(growthVal)}</div>
