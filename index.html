@@ -1480,8 +1480,8 @@ async function loadDashboardData(){
     isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear - 1, months, false) : Promise.resolve([])
   ]);
 
-  const ach = isCompanyOverall ? achRaw : achAttr;
-  const lastYear = isCompanyOverall ? lastYearRaw : lastYearAttr;
+  const ach = achAttr;
+  const lastYear = lastYearAttr;
 
   const normalizeHqName = (hq) => {
     if (!hq) return 'Unknown';
