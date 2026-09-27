@@ -26,7 +26,7 @@ async function fixBrands() {
 
   while (true) {
     console.log(`Fetching sales offset ${offset}...`);
-    let salesRes = await fetch(`${SUPABASE_URL}/rest/v1/sales?select=*&limit=${limit}&offset=${offset}`, { headers });
+    let salesRes = await fetch(`${SUPABASE_URL}/rest/v1/sales?select=*&order=id.asc&limit=${limit}&offset=${offset}`, { headers });
     let data = await salesRes.json();
     if (data.length === 0) break;
     
