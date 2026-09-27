@@ -1,121 +1,125 @@
 const fs = require('fs');
-const path = require('path');
-const xlsx = require('xlsx');
+const XLSX = require('xlsx');
 
-const SUPABASE_URL = 'https://jxwazdpsnupjiogmxozn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2F6ZHBzbnVwamlvZ214b3puIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjc4NDU1NSwiZXhwIjoyMDk4MzYwNTU1fQ.rAMhoiLOIe6QLla1YEE-BFNL-51cqF1J300_IJ5Yl_A';
-const headers = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+const indexHtml = fs.readFileSync('index.html', 'utf8');
+const SUPABASE_URL = indexHtml.match(/const SUPABASE_URL\s*=\s*['"]([^'\"]+)['"]/)[1];
+const SUPABASE_ANON_KEY = indexHtml.match(/const SUPABASE_ANON_KEY\s*=\s*['"]([^'\"]+)['"]/)[1];
 
-// Excel date to JS date
-function excelDateToJSDate(serial) {
-  const utc_days  = Math.floor(serial - 25569);
-  const utc_value = utc_days * 86400;                                        
-  const date_info = new Date(utc_value * 1000);
-  return new Date(date_info.getFullYear(), date_info.getMonth(), date_info.getDate());
+const HEADERS = {
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+  'Content-Type': 'application/json',
+  Prefer: 'resolution=merge-duplicates,return=minimal'
+};
+
+const excelPath = '(Apr to Oct) 202526Sales.XLSX';
+if (!fs.existsSync(excelPath)) {
+  console.error('2025 Excel file not found:', excelPath);
+  process.exit(1);
 }
 
-async function upload2025Sales() {
-  const filePath = path.join(__dirname, '(Apr to Oct) 202526Sales.XLSX');
-  if (!fs.existsSync(filePath)) {
-    console.error('File not found:', filePath);
-    return;
+const workbook = XLSX.readFile(excelPath);
+const sheet = workbook.Sheets[workbook.SheetNames[0]];
+const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+if (rawRows.length === 0) {
+  console.error('Excel sheet is empty');
+  process.exit(1);
+}
+
+let headerIdx = rawRows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().includes('distributor code')));
+if (headerIdx === -1) {
+  console.error('Could not locate header row with "Distributor Code"');
+  process.exit(1);
+}
+const header = rawRows[headerIdx];
+const dataRows = rawRows.slice(headerIdx + 1);
+
+function rowArrayToObj(arr) {
+  const obj = {};
+  for (let i = 0; i < header.length; i++) {
+    const key = header[i];
+    if (key) obj[key] = arr[i];
   }
-  
-  // Load product clubbing to resolve brand and canonical product code
-  const clubRes = await fetch(`${SUPABASE_URL}/rest/v1/product_clubbing?select=*`, { headers });
-  const clubData = await clubRes.json();
-  const clubMap = {};
-  clubData.forEach(c => clubMap[c.raw_product_code] = c);
-  
-  console.log('Reading Excel file...');
-  const wb = xlsx.readFile(filePath);
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  // Skip the first row which is messed up. Let's find the header row index
-  const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
-  let headerIndex = -1;
-  for (let i = 0; i < rawData.length; i++) {
-    if (rawData[i].some(v => typeof v === 'string' && v.toLowerCase().includes('stockist code'))) {
-      headerIndex = i;
-      break;
-    }
+  return obj;
+}
+const rows = dataRows.map(rowArrayToObj);
+
+function getField(row, names) {
+  for (const n of names) {
+    if (Object.prototype.hasOwnProperty.call(row, n)) return row[n];
+    const key = Object.keys(row).find(k => k && k.toLowerCase() === n.toLowerCase());
+    if (key) return row[key];
   }
-  
-  if (headerIndex === -1) {
-    console.error('Could not find header row');
-    return;
+  return null;
+}
+
+function mapRow(r) {
+  const billDate = getField(r, ['Bill Date', 'Bill_Date', 'BillDate']);
+  if (!billDate) return null; // Can't compute month without date
+
+  // billDate in Excel is serial number or string. Let's handle Excel serial dates.
+  let date;
+  if (typeof billDate === 'number') {
+    date = new Date((billDate - (25567 + 2)) * 86400 * 1000);
+  } else {
+    date = new Date(billDate);
   }
+  if (isNaN(date.getTime())) return null;
+
+  const m = date.getMonth(); // 0-11
+  const period_month = m >= 3 ? m - 2 : m + 10;
   
-  const headersRow = rawData[headerIndex];
-  const rows = [];
-  for (let i = headerIndex + 1; i < rawData.length; i++) {
-    const rowArray = rawData[i];
-    if (!rowArray || rowArray.length === 0) continue;
-    
-    const row = {};
-    headersRow.forEach((h, colIdx) => {
-      if (h) row[h] = rowArray[colIdx];
-    });
-    rows.push(row);
+  return {
+    period_year: 2025,
+    period_month: period_month,
+    distributor_code: (() => {
+      const v = getField(r, ['Distributor Code', 'Distributor_Code']);
+      return v ? String(v).padStart(3, '0') : null;
+    })(),
+    stockist_code: getField(r, ['Stockist Code', 'Stockist_Code']),
+    brand: getField(r, ['Brand Name', 'Brand', 'brand']),
+    canonical_product_code: getField(r, ['Product Code', 'Canonical Product Code', 'Canonical_Product_Code', 'SKU Code']),
+    quantity: Number(getField(r, ['Quantity']) || 0),
+    amount: Number(getField(r, ['Amount']) || 0),
+    raw_product_code: getField(r, ['SKU Code', 'Product Code']),
+    raw_product_name: getField(r, ['Product Name', 'SKU Name', 'Product Name'])
+  };
+}
+
+const payload = rows.map(mapRow).filter(r => r && r.distributor_code && r.stockist_code);
+
+async function deleteExisting() {
+  const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2025&period_month=in.(1,2,3,4,5,6,7)`;
+  const res = await fetch(url, { method: 'DELETE', headers: HEADERS });
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error('Failed to delete existing 2025 rows:', txt);
+    process.exit(1);
   }
-  
-  const batch = rows.filter(r => r['Stockist Code']).map(r => {
-    let billDateVal = r['Bill Date'];
-    let dateObj;
-    if (typeof billDateVal === 'number') {
-      dateObj = excelDateToJSDate(billDateVal);
-    } else if (typeof billDateVal === 'string') {
-      dateObj = new Date(billDateVal);
-    }
-    
-    // FY is April to March
-    let period_year = dateObj.getFullYear();
-    let month = dateObj.getMonth() + 1; // 1-12
-    if (month >= 4) {
-      // Apr-Dec is same year as FY start
-    } else {
-      // Jan-Mar is next year, so FY start is previous year
-      period_year -= 1;
-    }
-    
-    // Period month: April = 1, March = 12
-    let period_month = month >= 4 ? month - 3 : month + 9;
-    
-    let rawProductCode = r['Product Code'] || '';
-    let canonical = clubMap[rawProductCode];
-    let brand = canonical ? canonical.brand : '-';
-    let canonicalCode = canonical ? canonical.canonical_product_code : rawProductCode;
-    
-    return {
-      period_year: Number(period_year) || 0,
-      period_month: Number(period_month) || 0,
-      bill_date: dateObj ? String(dateObj.toISOString().split('T')[0]) : '2025-01-01',
-      stockist_code: String(r['Stockist Code'] || ''),
-      hq_code: String(r['HQ Code'] || ''),
-      hq_name: String(r['HQ'] || ''),
-      raw_product_code: String(rawProductCode || ''),
-      canonical_product_code: String(canonicalCode || ''),
-      brand: String(brand || ''),
-      quantity: Number(r['Quantity']) || 0,
-      amount: Number(r['Netamount']) || 0
-    };
+  console.log('Deleted existing 2025 rows for Apr-Oct.');
+}
+
+async function upsertBatch(batch) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/sales?on_conflict=id`, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify(batch)
   });
-  
-  console.log(`Parsed ${batch.length} rows.`);
-  
-  const CHUNK = 5000;
-  for (let i = 0; i < batch.length; i += CHUNK) {
-    const chunk = batch.slice(i, i + CHUNK);
-    console.log(`Inserting ${i} to ${i + CHUNK}...`);
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/sales`, {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify(chunk)
-    });
-    if (!resp.ok) {
-      console.error('Error inserting chunk:', await resp.text());
-    }
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error('Batch upsert failed:', txt);
+    process.exit(1);
   }
-  console.log('Finished uploading 2025 sales');
 }
 
-upload2025Sales().catch(console.error);
+(async () => {
+  console.log(`Found header at row ${headerIdx + 1}. Uploading ${payload.length} 2025 rows...`);
+  await deleteExisting();
+  const BATCH_SIZE = 1000;
+  for (let i = 0; i < payload.length; i += BATCH_SIZE) {
+    const batch = payload.slice(i, i + BATCH_SIZE);
+    await upsertBatch(batch);
+    console.log(`Uploaded batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} rows)`);
+  }
+  console.log('2025 sales upload complete.');
+})();
