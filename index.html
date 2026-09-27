@@ -1472,6 +1472,9 @@ async function loadDashboardData(){
 
   const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
+  const { data: clubRows, error: clubErr } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
+  if (clubErr) { body.innerHTML = `<div class="err">Failed to load product catalog: ${clubErr.message}</div>`; return; }
+
   const [tgt, achAttr, lastYearAttr, achRaw, lastYearRaw] = await Promise.all([
     fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, months, true),
     fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, months, true),
@@ -1479,6 +1482,19 @@ async function loadDashboardData(){
     isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear, months, false) : Promise.resolve([]),
     isCompanyOverall ? fetchAllRows('sales', 'period_year', 'period_year', 'period_month', currentYear - 1, months, false) : Promise.resolve([])
   ]);
+
+  const resolveBrandTop = (r) => {
+    if (!r.brand || r.brand === '-') {
+      const club = (clubRows || []).find(c => c.canonical_product_code === r.canonical_product_code);
+      if (club && club.canonical_brand) r.brand = club.canonical_brand.toString().trim();
+    }
+  };
+  achAttr.forEach(resolveBrandTop);
+  lastYearAttr.forEach(resolveBrandTop);
+  tgt.forEach(resolveBrandTop);
+  if (achRaw) achRaw.forEach(resolveBrandTop);
+  if (lastYearRaw) lastYearRaw.forEach(resolveBrandTop);
+
 
   const ach = isCompanyOverall ? achRaw : achAttr;
   const lastYear = isCompanyOverall ? lastYearRaw : lastYearAttr;
@@ -2366,11 +2382,7 @@ async function loadStockStatementData(){
     stockistSelector.style.display = visibleStockistList.length ? 'inline-block' : 'none';
     stockistSelector.disabled = !visibleStockistList.length;
   }
-  const { data: clubRows, error: clubErr } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
-  if (clubErr) {
-    body.innerHTML = `<div class="err">Failed to load product catalog: ${clubErr.message}</div>`;
-    return;
-  }
+  // product_clubbing hoisted
   const productMap = new Map();
   (clubRows || []).forEach(r => {
     const productName = (r.canonical_brand || r.raw_product_code || '').toString().trim();
