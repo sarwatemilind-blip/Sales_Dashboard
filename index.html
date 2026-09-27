@@ -2425,7 +2425,31 @@ async function loadStockStatementData(){
   let currentSales = [];
   try {
     const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
-    currentSales = (await fetchAllSalesForMonth(targetYear, targetMonth)).filter(r => (isCompanyOverall || visibleStockistMap.has(normalizeEmpId(r.stockist_code))) && r.brand !== 'HYGIENE_EXPIRY');
+    let rawSales = await fetchAllSalesForMonth(targetYear, targetMonth);
+    let filteredSales = [];
+    rawSales.forEach(r => {
+      const stockistCode = normalizeEmpId(r.stockist_code);
+      const isVisible = visibleStockistMap.has(stockistCode);
+      if (!isCompanyOverall && !isVisible) return;
+      if (r.brand === 'HYGIENE_EXPIRY') return;
+
+      if (stockistCode === 'C0563') {
+        let share = 0;
+        if (isCompanyOverall) {
+          share = 1.0;
+        } else {
+          if (queryScopeIds.includes('ADLA102')) share += 0.20;
+          if (queryScopeIds.includes('ADLA105')) share += 0.20;
+          if (queryScopeIds.includes('ADLA_INST')) share += 0.60;
+        }
+        if (share > 0) {
+          filteredSales.push({ ...r, quantity: r.quantity * share, amount: r.amount * share });
+        }
+      } else {
+        filteredSales.push(r);
+      }
+    });
+    currentSales = filteredSales;
   } catch (error) {
     body.innerHTML = `<div class="err">Failed to load sales: ${error.message}</div>`;
     return;
@@ -4515,6 +4539,16 @@ async function loadMultiCompareData(activeScopeIds, pill) {
     fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, monthsVal, true),
     fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, monthsVal, true)
   ]);
+
+  const resolveBrand = (r) => {
+    if (!r.brand || r.brand === '-') {
+      const club = (clubRows || []).find(c => c.canonical_product_code === r.canonical_product_code);
+      if (club && club.canonical_brand) r.brand = club.canonical_brand.toString().trim();
+    }
+  };
+  achAttr.forEach(resolveBrand);
+  lastYearAttr.forEach(resolveBrand);
+  tgt.forEach(resolveBrand);
 
   const filteredAch = achAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
   const filteredLastYear = lastYearAttr.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
