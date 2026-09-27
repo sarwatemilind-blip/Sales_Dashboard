@@ -375,12 +375,8 @@ const getFiscalYearStart = (date) => {
 };
 
 const defaultDate = new Date("2026-07-03T15:05:41+05:30");
-let currentYear = getFiscalYearStart(new Date());
-let currentMonth = getFiscalMonthNum(new Date());
-if (currentYear < 2025 || currentYear > 2030) {
-  currentYear = getFiscalYearStart(defaultDate);
-  currentMonth = getFiscalMonthNum(defaultDate);
-}
+let currentYear = getFiscalYearStart(defaultDate);
+let currentMonth = getFiscalMonthNum(defaultDate);
 let currentView = 'monthly'; // 'monthly', 'bimonthly', 'mtd', 'ytd', 'multi'
 let mcSelectedViews = ['monthly'];
 let mcSelectedMonths = [];
@@ -6669,4 +6665,4 @@ window.loadCfaSummary = async function() {
 </script>
 </body>
 
-</html>
+</html>
