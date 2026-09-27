@@ -1676,7 +1676,7 @@ tgt.forEach(r => {
         const cat = getBrandCategory(r.brand).toLowerCase();
         let targetHq = entry.emp.hq_name ? normalizeHqName(entry.emp.hq_name) : 'Unknown';
         const beCount = targetHq !== 'Unknown' ? (targetHqBeCount[targetHq]?.size || 1) : 1;
-        const val = ((parseFloat(r.val_target_per_be)||0) / beCount) * 100000 * targetMultiplier;
+        const val = (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
         entry[cat].targetVal += val;
         entry.total.targetVal += val;
 
@@ -1685,7 +1685,7 @@ tgt.forEach(r => {
            beBrandMap[key] = { emp_id: empId, emp_name: entry.emp.name || empId, hq: entry.emp.hq_name || '', region: entry.emp.region || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 };
         }
         beBrandMap[key].targetVal += val;
-        beBrandMap[key].targetUnit += ((parseFloat(r.unit_target_per_be)||0) / beCount) * targetMultiplier;
+        beBrandMap[key].targetUnit += (parseFloat(r.unit_target_per_be)||0) * targetMultiplier;
       }
     });
 
