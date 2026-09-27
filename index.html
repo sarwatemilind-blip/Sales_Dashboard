@@ -6177,6 +6177,18 @@ async function renderIncentive() {
       fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear - 1, fetchMonths)
     ]);
     tgt = res[0]; ach = res[1]; lastYear = res[2];
+
+    const { data: clubRows } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
+    const resolveBrandInc = (r) => {
+      if (!r.brand || r.brand === '-') {
+        const club = (clubRows || []).find(c => c.canonical_product_code === r.canonical_product_code);
+        if (club && club.canonical_brand) r.brand = club.canonical_brand.toString().trim();
+      }
+    };
+    if (tgt) tgt.forEach(resolveBrandInc);
+    if (ach) ach.forEach(resolveBrandInc);
+    if (lastYear) lastYear.forEach(resolveBrandInc);
+
     
     if (currentMonth === 12) {
       const nqRes = await Promise.all([
@@ -6185,6 +6197,10 @@ async function renderIncentive() {
       ]);
       const nqTgt = nqRes[0];
       const nqAch = nqRes[1];
+
+      if (nqTgt) nqTgt.forEach(resolveBrandInc);
+      if (nqAch) nqAch.forEach(resolveBrandInc);
+
       
       nqTgt.forEach(r => {
         const val = (parseFloat(r.val_target_per_be) || 0) * 100000;
