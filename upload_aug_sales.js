@@ -53,68 +53,58 @@ function getField(row, names) {
   return null;
 }
 
-async function uploadAugustSales() {
-  const clubRes = await fetch(SUPABASE_URL + '/rest/v1/product_clubbing?select=raw_product_code,canonical_brand,canonical_product_code', { headers: HEADERS });
-  const clubData = await clubRes.json();
-  const clubMap = {};
-  for (let c of clubData) clubMap[c.raw_product_code] = c;
+function mapRow(r) {
+  return {
+    period_year: 2026,
+    period_month: 5,
+    distributor_code: (() => {
+      const v = getField(r, ['Distributor Code', 'Distributor_Code']);
+      return v ? String(v).padStart(3, '0') : null;
+    })(),
+    stockist_code: getField(r, ['Stockist Code', 'Stockist_Code']),
+    brand: getField(r, ['Brand Name', 'Brand', 'brand']),
+    canonical_product_code: getField(r, ['Product Code', 'Canonical Product Code', 'Canonical_Product_Code', 'SKU Code']),
+    quantity: Number(getField(r, ['Quantity']) || 0),
+    amount: Number(getField(r, ['Amount']) || 0),
+    raw_product_code: getField(r, ['SKU Code', 'Product Code']),
+    raw_product_name: getField(r, ['Product Name', 'SKU Name', 'Product Name'])
+  };
+}
 
-  function mapRow(r) {
-    let rpc = getField(r, ['Product Code', 'SKU Code']);
-    let b = getField(r, ['Brand Name', 'Brand', 'brand']);
-    let cpc = getField(r, ['Canonical Product Code', 'Product Code']);
-    
-    const club = clubMap[rpc];
-    if (club) {
-      b = club.canonical_brand;
-      cpc = club.canonical_product_code;
-    } else {
-      b = '-';
-    }
+const payload = rows.map(mapRow).filter(r => r.distributor_code && r.stockist_code);
 
-    return {
-      period_year: 2026,
-      period_month: 5,
-      distributor_code: (() => {
-        const v = getField(r, ['Distributor Code', 'Distributor_Code']);
-        return v ? String(v).padStart(3, '0') : null;
-      })(),
-      stockist_code: getField(r, ['Stockist Code', 'Stockist_Code']),
-      brand: b,
-      canonical_product_code: cpc,
-      quantity: Number(getField(r, ['Quantity']) || 0),
-      amount: Number(getField(r, ['Amount']) || 0),
-      raw_product_code: rpc,
-      raw_product_name: getField(r, ['Product Name', 'SKU Name'])
-    };
-  }
-
-  const payload = rows.map(mapRow).filter(r => r.distributor_code && r.stockist_code);
-
+async function deleteExisting() {
   const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2026&period_month=eq.5`;
   const res = await fetch(url, { method: 'DELETE', headers: HEADERS });
   if (!res.ok) {
-    console.error('Failed to delete existing August rows:', await res.text());
+    const txt = await res.text();
+    console.error('Failed to delete existing August rows:', txt);
     process.exit(1);
   }
   console.log('Deleted any existing August 2026 rows.');
+}
 
+async function upsertBatch(batch) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/sales?on_conflict=id`, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify(batch)
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error('Batch upsert failed:', txt);
+    process.exit(1);
+  }
+}
+
+(async () => {
   console.log(`Found header at row ${headerIdx + 1}. Uploading ${payload.length} August 2026 rows...`);
+  await deleteExisting();
   const BATCH_SIZE = 1000;
   for (let i = 0; i < payload.length; i += BATCH_SIZE) {
     const batch = payload.slice(i, i + BATCH_SIZE);
-    const upRes = await fetch(`${SUPABASE_URL}/rest/v1/sales?on_conflict=id`, {
-      method: 'POST',
-      headers: HEADERS,
-      body: JSON.stringify(batch)
-    });
-    if (!upRes.ok) {
-      console.error('Batch upsert failed:', await upRes.text());
-      process.exit(1);
-    }
+    await upsertBatch(batch);
     console.log(`Uploaded batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} rows)`);
   }
   console.log('August 2026 sales upload complete.');
-}
-
-uploadAugustSales();
+})();
