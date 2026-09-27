@@ -1637,6 +1637,15 @@ tgt.forEach(r => {
 
     const beBrandMap = {};
 
+    const targetHqBeCount = {};
+    tgt.forEach(r => {
+      let hq = r.hq_name ? normalizeHqName(r.hq_name) : 'Unknown';
+      if (hq !== 'Unknown') {
+        if (!targetHqBeCount[hq]) targetHqBeCount[hq] = new Set();
+        targetHqBeCount[hq].add(r.emp_id);
+      }
+    });
+
     tgt.forEach(r => {
       let empId = r.emp_id;
       if (!teamMap[empId]) {
@@ -1665,7 +1674,9 @@ tgt.forEach(r => {
       const entry = teamMap[empId];
       if (entry) {
         const cat = getBrandCategory(r.brand).toLowerCase();
-        const val = (parseFloat(r.val_target_per_be)||0) * 100000 * targetMultiplier;
+        let targetHq = entry.emp.hq_name ? normalizeHqName(entry.emp.hq_name) : 'Unknown';
+        const beCount = targetHq !== 'Unknown' ? (targetHqBeCount[targetHq]?.size || 1) : 1;
+        const val = ((parseFloat(r.val_target_per_be)||0) / beCount) * 100000 * targetMultiplier;
         entry[cat].targetVal += val;
         entry.total.targetVal += val;
 
@@ -1674,7 +1685,9 @@ tgt.forEach(r => {
            beBrandMap[key] = { emp_id: empId, emp_name: entry.emp.name || empId, hq: entry.emp.hq_name || '', region: entry.emp.region || '', brand: r.brand || 'Unknown', targetVal: 0, achVal: 0, lastYearVal: 0, targetUnit: 0, achUnit: 0 };
         }
         beBrandMap[key].targetVal += val;
-        beBrandMap[key].targetUnit += (parseFloat(r.unit_target_per_be)||0) * targetMultiplier;
+        let targetHq = entry.emp.hq_name ? normalizeHqName(entry.emp.hq_name) : 'Unknown';
+        const beCount = targetHq !== 'Unknown' ? (targetHqBeCount[targetHq]?.size || 1) : 1;
+        beBrandMap[key].targetUnit += ((parseFloat(r.unit_target_per_be)||0) / beCount) * targetMultiplier;
       }
     });
 
