@@ -74,7 +74,7 @@ async function uploadAugustSales() {
 
     return {
       period_year: 2026,
-      period_month: 8,
+      period_month: 5,
       distributor_code: (() => {
         const v = getField(r, ['Distributor Code', 'Distributor_Code']);
         return v ? String(v).padStart(3, '0') : null;
@@ -91,7 +91,7 @@ async function uploadAugustSales() {
 
   const payload = rows.map(mapRow).filter(r => r.distributor_code && r.stockist_code);
 
-  const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2026&period_month=eq.8`;
+  const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2026&period_month=eq.5`;
   const res = await fetch(url, { method: 'DELETE', headers: HEADERS });
   if (!res.ok) {
     console.error('Failed to delete existing August rows:', await res.text());
