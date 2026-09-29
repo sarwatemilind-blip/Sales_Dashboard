@@ -2382,9 +2382,24 @@ async function loadStockStatementData(){
     stockistSelector.style.display = visibleStockistList.length ? 'inline-block' : 'none';
     stockistSelector.disabled = !visibleStockistList.length;
   }
-  // product_clubbing hoisted
+  let clubRows = [];
+  try {
+    const clubResp = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
+    if (clubResp.error) {
+      body.innerHTML = `<div class="err">Failed to load product catalog: ${clubResp.error.message}</div>`;
+      return;
+    }
+    clubRows = clubResp.data || [];
+  } catch (err) {
+    body.innerHTML = `<div class="err">Failed to load product catalog: ${err.message}</div>`;
+    return;
+  }
+
+
+
+
   const productMap = new Map();
-  (clubRows || []).forEach(r => {
+  clubRows.forEach(r => {
     const productName = (r.canonical_brand || r.raw_product_code || '').toString().trim();
     const productCode = (r.canonical_product_code || r.raw_product_code || productName || '').toString().trim();
     const key = normalizeEmpId(productName || productCode);
@@ -2434,6 +2449,22 @@ async function loadStockStatementData(){
     return allSales;
   }
 
+  function getSubtreeIds(rootId) {
+    if (rootId === 'overall') return ['overall'];
+    const ids = new Set([rootId]);
+    let added;
+    do {
+      added = false;
+      for (const e of allDownlineEmployees) {
+        if (!ids.has(e.emp_id) && e.manager_emp_id && ids.has(e.manager_emp_id)) {
+          ids.add(e.emp_id);
+          added = true;
+        }
+      }
+    } while (added);
+    return Array.from(ids);
+  }
+  const queryScopeIds = [...new Set([...getSubtreeIds(scopeKey), 'overall'])];
   let currentSales = [];
   try {
     const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
@@ -2474,22 +2505,6 @@ async function loadStockStatementData(){
   }
   const prevPeriod = prevFiscalPeriod(targetYear, targetMonth);
 
-  function getSubtreeIds(rootId) {
-    if (rootId === 'overall') return ['overall'];
-    const ids = new Set([rootId]);
-    let added;
-    do {
-      added = false;
-      for (const e of allDownlineEmployees) {
-        if (!ids.has(e.emp_id) && e.manager_emp_id && ids.has(e.manager_emp_id)) {
-          ids.add(e.emp_id);
-          added = true;
-        }
-      }
-    } while (added);
-    return Array.from(ids);
-  }
-  const queryScopeIds = [...new Set([...getSubtreeIds(scopeKey), 'overall'])];
 
   const [currentSavedResp, prevSavedAnyResp] = await Promise.all([
     (async () => {
@@ -4546,6 +4561,7 @@ async function loadMultiCompareData(activeScopeIds, pill) {
 
   const isCompanyOverall = selectedEmpId === 'overall' && (session.designation === 'ADMIN' || session.designation === 'VP');
 
+  const { data: clubRows } = await sb.from('product_clubbing').select('raw_product_code, canonical_brand, canonical_product_code');
   const [tgt, achAttr, lastYearAttr] = await Promise.all([
     fetchAllRows('targets', 'emp_id', 'year', 'month_num', currentYear, monthsVal, true),
     fetchAllRows('sales_attributed', 'be_emp_id', 'period_year', 'period_month', currentYear, monthsVal, true),
