@@ -513,13 +513,21 @@ async function saveEditConfig(year, month) {
     }, { onConflict: 'scope_emp_id,period_year,period_month,stockist_code,product_code' });
     if (error) {
       console.error('saveEditConfig DB error:', error.message);
-      alert('Failed to save edit-window setting: ' + error.message);
-      await loadEditConfig(year, month);
+      if (error.message && error.message.includes('Failed to fetch')) {
+        console.warn('Network error while saving config DB.');
+      } else {
+        alert('Failed to save edit-window setting: ' + error.message);
+        await loadEditConfig(year, month);
+      }
     }
   } catch(e) {
     console.error('saveEditConfig exception:', e);
-    alert('Failed to save edit-window setting: ' + e.message);
-    await loadEditConfig(year, month);
+    if (e.message && e.message.includes('Failed to fetch')) {
+      console.warn('Network or ad-blocker error while saving config. Proceeding with local unlocked state.');
+    } else {
+      alert('Failed to save edit-window setting: ' + e.message);
+      await loadEditConfig(year, month);
+    }
   }
 }
 

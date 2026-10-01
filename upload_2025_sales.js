@@ -12,37 +12,18 @@ const HEADERS = {
   Prefer: 'resolution=merge-duplicates,return=minimal'
 };
 
-const excelPath = '(Apr to Oct) 202526Sales.XLSX';
-if (!fs.existsSync(excelPath)) {
-  console.error('2025 Excel file not found:', excelPath);
-  process.exit(1);
+function getRows(filename) {
+  const workbook = XLSX.readFile(filename);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  let headerIdx = rawRows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().includes('distributor code')));
+  const header = rawRows[headerIdx];
+  return rawRows.slice(headerIdx + 1).map(arr => {
+    const obj = {};
+    for (let i = 0; i < header.length; i++) if (header[i]) obj[header[i]] = arr[i];
+    return obj;
+  });
 }
-
-const workbook = XLSX.readFile(excelPath);
-const sheet = workbook.Sheets[workbook.SheetNames[0]];
-const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-if (rawRows.length === 0) {
-  console.error('Excel sheet is empty');
-  process.exit(1);
-}
-
-let headerIdx = rawRows.findIndex(r => r && r.some(c => typeof c === 'string' && c.toLowerCase().includes('distributor code')));
-if (headerIdx === -1) {
-  console.error('Could not locate header row with "Distributor Code"');
-  process.exit(1);
-}
-const header = rawRows[headerIdx];
-const dataRows = rawRows.slice(headerIdx + 1);
-
-function rowArrayToObj(arr) {
-  const obj = {};
-  for (let i = 0; i < header.length; i++) {
-    const key = header[i];
-    if (key) obj[key] = arr[i];
-  }
-  return obj;
-}
-const rows = dataRows.map(rowArrayToObj);
 
 function getField(row, names) {
   for (const n of names) {
@@ -53,73 +34,102 @@ function getField(row, names) {
   return null;
 }
 
-function mapRow(r) {
-  const billDate = getField(r, ['Bill Date', 'Bill_Date', 'BillDate']);
-  if (!billDate) return null; // Can't compute month without date
-
-  // billDate in Excel is serial number or string. Let's handle Excel serial dates.
-  let date;
-  if (typeof billDate === 'number') {
-    date = new Date((billDate - (25567 + 2)) * 86400 * 1000);
-  } else {
-    date = new Date(billDate);
-  }
-  if (isNaN(date.getTime())) return null;
-
-  const m = date.getMonth(); // 0-11
-  const period_month = m >= 3 ? m - 2 : m + 10;
-  
-  return {
-    period_year: 2025,
-    period_month: period_month,
-    distributor_code: (() => {
-      const v = getField(r, ['Distributor Code', 'Distributor_Code']);
-      return v ? String(v).padStart(3, '0') : null;
-    })(),
-    stockist_code: getField(r, ['Stockist Code', 'Stockist_Code']),
-    brand: getField(r, ['Brand Name', 'Brand', 'brand']),
-    canonical_product_code: getField(r, ['Product Code', 'Canonical Product Code', 'Canonical_Product_Code', 'SKU Code']),
-    quantity: Number(getField(r, ['Quantity']) || 0),
-    amount: Number(getField(r, ['Amount']) || 0),
-    raw_product_code: getField(r, ['SKU Code', 'Product Code']),
-    raw_product_name: getField(r, ['Product Name', 'SKU Name', 'Product Name'])
-  };
-}
-
-const payload = rows.map(mapRow).filter(r => r && r.distributor_code && r.stockist_code);
-
-async function deleteExisting() {
-  const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2025&period_month=in.(1,2,3,4,5,6,7)`;
-  const res = await fetch(url, { method: 'DELETE', headers: HEADERS });
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error('Failed to delete existing 2025 rows:', txt);
-    process.exit(1);
-  }
-  console.log('Deleted existing 2025 rows for Apr-Oct.');
-}
-
-async function upsertBatch(batch) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/sales?on_conflict=id`, {
-    method: 'POST',
-    headers: HEADERS,
-    body: JSON.stringify(batch)
+async function fetchClubbingMap() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/product_clubbing?select=raw_product_code,canonical_brand,canonical_product_code`, { headers: HEADERS });
+  const data = await res.json();
+  const map = {};
+  data.forEach(d => {
+    map[d.raw_product_code] = d;
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error('Batch upsert failed:', txt);
-    process.exit(1);
-  }
+  return map;
 }
 
-(async () => {
-  console.log(`Found header at row ${headerIdx + 1}. Uploading ${payload.length} 2025 rows...`);
-  await deleteExisting();
+async function run() {
+  console.log('Fetching product_clubbing map...');
+  const clubMap = await fetchClubbingMap();
+
+  console.log('Loading 2026 data to build exact Brand mapping...');
+  const rows26 = getRows('SALES EXPORT AUG26 - Copy.XLSX');
+  const map26 = {};
+  rows26.forEach(r => {
+    const rpc = getField(r, ['Product Code', 'SKU Code']);
+    const brand = getField(r, ['Brand Name', 'Brand', 'brand']);
+    if (rpc && brand && brand !== '-') {
+      map26[rpc] = brand;
+    }
+  });
+
+  console.log('Loading 2025 data...');
+  const rows25 = getRows('(Apr to Oct) 202526Sales.XLSX');
+  
+  const payload = [];
+  rows25.forEach(r => {
+    const rpc = getField(r, ['Product Code', 'SKU Code']);
+    let cpc = getField(r, ['Canonical Product Code', 'Canonical_Product_Code', 'SKU Code']);
+    
+    // PRIORITY 1: 2026 Excel mapping
+    let brand = map26[rpc];
+    if (!brand) {
+       // PRIORITY 2: product_clubbing mapping
+       if (clubMap[rpc]) {
+          brand = clubMap[rpc].canonical_brand;
+          cpc = clubMap[rpc].canonical_product_code;
+       } else {
+          // PRIORITY 3: Fallback to whatever is in the 2025 file
+          brand = getField(r, ['Brand Name', 'Brand', 'brand']);
+          if (!brand) brand = '-';
+       }
+    }
+
+    const billDate = getField(r, ['Bill Date', 'Bill_Date', 'BillDate']);
+    if (!billDate) return;
+    let date = typeof billDate === 'number' ? new Date((billDate - (25567 + 2)) * 86400 * 1000) : new Date(billDate);
+    if (isNaN(date.getTime())) return;
+
+    const m = date.getMonth();
+    const period_month = m >= 3 ? m - 2 : m + 10;
+    
+    const dist = getField(r, ['Distributor Code', 'Distributor_Code']);
+    const stock = getField(r, ['Stockist Code', 'Stockist_Code']);
+    if(!dist || !stock) return;
+
+    payload.push({
+      period_year: 2025,
+      period_month: period_month,
+      distributor_code: String(dist).padStart(3, '0'),
+      stockist_code: stock,
+      brand: brand,
+      canonical_product_code: cpc,
+      quantity: Number(getField(r, ['Quantity']) || 0),
+      amount: Number(getField(r, ['Amount']) || 0),
+      raw_product_code: rpc,
+      raw_product_name: getField(r, ['Product Name', 'SKU Name'])
+    });
+  });
+
+  console.log('Deleting 2025 data...');
+  const url = `${SUPABASE_URL}/rest/v1/sales?period_year=eq.2025&period_month=in.(1,2,3,4,5,6,7)`;
+  const delRes = await fetch(url, { method: 'DELETE', headers: HEADERS });
+  if (!delRes.ok) {
+    console.error('Failed to delete existing 2025 rows:', await delRes.text());
+    process.exit(1);
+  }
+  
+  console.log(`Uploading ${payload.length} 2025 rows...`);
   const BATCH_SIZE = 1000;
   for (let i = 0; i < payload.length; i += BATCH_SIZE) {
     const batch = payload.slice(i, i + BATCH_SIZE);
-    await upsertBatch(batch);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/sales?on_conflict=id`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(batch)
+    });
+    if (!res.ok) {
+      console.error('Batch upsert failed:', await res.text());
+      process.exit(1);
+    }
     console.log(`Uploaded batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} rows)`);
   }
-  console.log('2025 sales upload complete.');
-})();
+  console.log('2025 sales upload complete with COMBINED BRAND MAPPING.');
+}
+run();
