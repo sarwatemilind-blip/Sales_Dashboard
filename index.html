@@ -1509,7 +1509,11 @@ async function loadDashboardData(){
 
   const normalizeHqName = (hq) => {
     if (!hq) return 'Unknown';
-    return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
+    let norm = hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim().toUpperCase();
+    if (norm === 'BARRACKPORE') norm = 'BARRACKPUR';
+    if (norm === 'KOLKATA 2') norm = 'KOLKATA 2 PAIKPARA';
+    if (norm === 'AIZAWL') norm = 'AIZWAL';
+    return norm || 'Unknown';
   };
 
   let stockistHqMap = new Map();
@@ -1680,7 +1684,12 @@ tgt.forEach(r => {
           else hq = 'Unknown';
         }
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
+        let matchingBEs = Object.values(teamMap).filter(t => t.emp && t.emp.hq_name && normalizeHqName(t.emp.hq_name) === hq && t.emp.designation === 'BE');
+        if (matchingBEs.length === 1) {
+          empId = matchingBEs[0].emp.emp_id;
+        } else {
+          empId = 'VACANT_' + hq;
+        }
         if (!teamMap[empId]) {
           let region = '';
           const peer = allDownlineEmployees.find(e => e.hq_name === hq);
@@ -1729,7 +1738,12 @@ tgt.forEach(r => {
           }
         }
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
+        let matchingBEs = Object.values(teamMap).filter(t => t.emp && t.emp.hq_name && normalizeHqName(t.emp.hq_name) === hq && t.emp.designation === 'BE');
+        if (matchingBEs.length === 1) {
+          empId = matchingBEs[0].emp.emp_id;
+        } else {
+          empId = 'VACANT_' + hq;
+        }
         if (!teamMap[empId]) {
           let region = '';
           const peer = allDownlineEmployees.find(e => e.hq_name === hq);
@@ -1775,7 +1789,12 @@ tgt.forEach(r => {
           }
         }
         if (hq.toUpperCase() === 'UDIPI') hq = 'MANGALORE';
-        empId = 'VACANT_' + hq;
+        let matchingBEs = Object.values(teamMap).filter(t => t.emp && t.emp.hq_name && normalizeHqName(t.emp.hq_name) === hq && t.emp.designation === 'BE');
+        if (matchingBEs.length === 1) {
+          empId = matchingBEs[0].emp.emp_id;
+        } else {
+          empId = 'VACANT_' + hq;
+        }
         if (!teamMap[empId]) {
           let region = '';
           const peer = allDownlineEmployees.find(e => e.hq_name === hq);
@@ -2483,22 +2502,7 @@ async function loadStockStatementData(){
       const isVisible = visibleStockistMap.has(stockistCode);
       if (!isCompanyOverall && !isVisible) return;
       if (r.brand === 'HYGIENE_EXPIRY') return;
-
-      if (stockistCode === 'C0563') {
-        let share = 0;
-        if (isCompanyOverall) {
-          share = 1.0;
-        } else {
-          if (queryScopeIds.includes('ADLA102')) share += 0.20;
-          if (queryScopeIds.includes('ADLA105')) share += 0.20;
-          if (queryScopeIds.includes('ADLA_INST')) share += 0.60;
-        }
-        if (share > 0) {
-          filteredSales.push({ ...r, quantity: r.quantity * share, amount: r.amount * share });
-        }
-      } else {
-        filteredSales.push(r);
-      }
+      filteredSales.push(r);
     });
     currentSales = filteredSales;
   } catch (error) {
@@ -4593,7 +4597,11 @@ async function loadMultiCompareData(activeScopeIds, pill) {
   // Normalise HQ name (shared with loadDashboardData logic)
   const normalizeHqName = (hq) => {
     if (!hq) return 'Unknown';
-    return hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim() || 'Unknown';
+    let norm = hq.replace(/\s*\(Vacant\s*BE\)\s*/gi, '').trim().toUpperCase();
+    if (norm === 'BARRACKPORE') norm = 'BARRACKPUR';
+    if (norm === 'KOLKATA 2') norm = 'KOLKATA 2 PAIKPARA';
+    if (norm === 'AIZAWL') norm = 'AIZWAL';
+    return norm || 'Unknown';
   };
 
   let stockistHqMap = new Map();
@@ -4637,7 +4645,12 @@ async function loadMultiCompareData(activeScopeIds, pill) {
           }
         }
       }
-      empId = 'VACANT_' + hq;
+      let existingBE = Object.values(teamMap).find(t => t.emp && t.emp.hq_name && normalizeHqName(t.emp.hq_name) === hq && t.emp.designation === 'BE');
+      if (existingBE) {
+        empId = existingBE.emp.emp_id;
+      } else {
+        empId = 'VACANT_' + hq;
+      }
       if (!teamMap[empId]) {
         let region = '';
         const peer = allDownlineEmployees.find(e => e.hq_name === hq);
