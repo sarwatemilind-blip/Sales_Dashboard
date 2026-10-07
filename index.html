@@ -3800,6 +3800,13 @@ function renderAdmin(){
       <div id="expiryUpStatus" class="small"></div>
     </div>
     <div class="upload-box" style="margin-top:20px;">
+      <div class="section-title" style="margin-top:0;">Upload Product Clubbing</div>
+      <p class="small">Upload the <b>product_clubbing.csv</b> file to replace the product merging rules. Columns required: <b>raw_product_code, canonical_brand, canonical_product_code</b>.</p>
+      <input type="file" id="clubbingFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
+      <div class="progress"><div id="clubbingProgBar"></div></div>
+      <div id="clubbingUpStatus" class="small"></div>
+    </div>
+    <div class="upload-box" style="margin-top:20px;">
       <div class="section-title" style="margin-top:0;">Upload Targets</div>
       <p class="small">Upload the <b>targets.csv</b> or matching Excel file to replace the target master after employee corrections. Required columns: <b>emp_id, hq_code, hq_name, brand, product_code, state, region, no_of_be, month_num, month_name, year, val_target_total, unit_target_total, val_target_per_be, unit_target_per_be</b>.</p>
       <input type="file" id="targetFileInput" accept=".xlsx,.xls,.csv" style="margin-top:10px;" />
