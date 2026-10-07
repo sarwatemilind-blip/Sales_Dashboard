@@ -2500,6 +2500,8 @@ async function loadStockStatementData(){
     rawSales.forEach(r => {
       const stockistCode = normalizeEmpId(r.stockist_code);
       const isVisible = visibleStockistMap.has(stockistCode);
+      const isHidden = hiddenStockistCodes.has(stockistCode.toUpperCase());
+      if (isHidden) return; // Always exclude hidden stockists
       if (!isCompanyOverall && !isVisible) return;
       if (r.brand === 'HYGIENE_EXPIRY') return;
       filteredSales.push(r);
@@ -2652,13 +2654,24 @@ async function loadStockStatementData(){
     stats.rate = stats.units > 0 ? (stats.value / stats.units) : stats.rate;
     historicalProductRateMap.set(productKey, stats);
   });
-  currentSales.forEach(r => {
+    currentSales.forEach(r => {
     const stockistCode = normalizeEmpId(r.stockist_code);
-    const productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
+    let productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
+    let productKey = productCode;
+    
+    // Merge -FREE variants into their parent product code
+    if (productCode.endsWith('-FREE')) {
+      productCode = productCode.substring(0, productCode.length - 5);
+      productKey = productCode;
+    }
+
     const key = `${stockistCode}|${productCode}`;
-    const productKey = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
     const mappingRow = visibleStockistMap.get(stockistCode) || {};
-    const productName = (r.raw_product_name || r.brand || r.canonical_product_code || r.raw_product_code || productCode || '').toString().trim();
+    // Strip (FREE) from product name
+    let productName = (r.raw_product_name || r.brand || r.canonical_product_code || r.raw_product_code || productCode || '').toString().trim();
+    if (productName.endsWith('(FREE)')) {
+      productName = productName.substring(0, productName.length - 6).trim();
+    }
     if (!salesMap.has(key)) {
       salesMap.set(key, {
         stockist_code: stockistCode,
