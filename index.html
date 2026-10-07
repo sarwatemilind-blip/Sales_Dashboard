@@ -1594,12 +1594,17 @@ async function loadDashboardData(){
   let filteredAch = ach.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
   let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
 
-  if (currentView === 'mtd') {
-    filteredAchAttr = filteredAchAttr.filter(r => !r.bill_date || r.bill_date <= todayStr);
-    filteredLastYearAttr = filteredLastYearAttr.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
+    if (currentView === 'mtd') {
+    const prorate = (arr, maxDate) => arr.map(r => {
+      if (!r.bill_date) return { ...r, amount: (r.amount || 0) * mtdRatio, quantity: (r.quantity || 0) * mtdRatio };
+      return r.bill_date <= maxDate ? r : null;
+    }).filter(Boolean);
+
+    filteredAchAttr = prorate(filteredAchAttr, todayStr);
+    filteredLastYearAttr = prorate(filteredLastYearAttr, lastYearTodayStr);
     
-    filteredAch = filteredAch.filter(r => !r.bill_date || r.bill_date <= todayStr);
-    filteredLastYear = filteredLastYear.filter(r => !r.bill_date || r.bill_date <= lastYearTodayStr);
+    filteredAch = prorate(filteredAch, todayStr);
+    filteredLastYear = prorate(filteredLastYear, lastYearTodayStr);
   }
 
   const sum = (rows, key) => rows.reduce((a,r) => a + (parseFloat(r[key])||0), 0);
