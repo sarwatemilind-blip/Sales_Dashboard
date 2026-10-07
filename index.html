@@ -1595,16 +1595,14 @@ async function loadDashboardData(){
   let filteredLastYear = lastYear.filter(r => !(r.brand || '').endsWith('(FREE)') && r.brand !== 'HYGIENE_EXPIRY');
 
     if (currentView === 'mtd') {
-    const prorate = (arr, maxDate) => arr.map(r => {
-      if (!r.bill_date) return { ...r, amount: (r.amount || 0) * mtdRatio, quantity: (r.quantity || 0) * mtdRatio };
-      return r.bill_date <= maxDate ? r : null;
-    }).filter(Boolean);
+    // Exact day-wise MTD comparison (historical bill dates restored from source file)
+    const upTo = (arr, maxDate) => arr.filter(r => !r.bill_date || r.bill_date <= maxDate);
 
-    filteredAchAttr = prorate(filteredAchAttr, todayStr);
-    filteredLastYearAttr = prorate(filteredLastYearAttr, lastYearTodayStr);
+    filteredAchAttr = upTo(filteredAchAttr, todayStr);
+    filteredLastYearAttr = upTo(filteredLastYearAttr, lastYearTodayStr);
     
-    filteredAch = prorate(filteredAch, todayStr);
-    filteredLastYear = prorate(filteredLastYear, lastYearTodayStr);
+    filteredAch = upTo(filteredAch, todayStr);
+    filteredLastYear = upTo(filteredLastYear, lastYearTodayStr);
   }
 
   const sum = (rows, key) => rows.reduce((a,r) => a + (parseFloat(r[key])||0), 0);
