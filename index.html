@@ -7,7 +7,78 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>Adonis Field Force — Sales Dashboard</title>
-<script src="supabase.js"></script>
+<script src="supabase.js">
+async function handleClubbingUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById("clubbingUpStatus").innerHTML = "Parsing file...";
+  document.getElementById("clubbingProgBar").style.width = "10%";
+  
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      const headers = rows[0].map(h => (h || '').toString().toLowerCase().trim());
+      const colRaw = headers.indexOf('raw_product_code');
+      const colBrand = headers.indexOf('canonical_brand');
+      const colCanon = headers.indexOf('canonical_product_code');
+      
+      if (colRaw === -1 || colCanon === -1) {
+        throw new Error('Required columns: raw_product_code, canonical_product_code');
+      }
+      
+      document.getElementById("clubbingUpStatus").innerHTML = "Deleting old mappings...";
+      document.getElementById("clubbingProgBar").style.width = "30%";
+      
+      const delRes = await fetch(SUPABASE_URL + '/rest/v1/product_clubbing', {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
+      });
+      if (!delRes.ok) throw new Error('Failed to delete old mappings');
+      
+      const records = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r[colRaw] || !r[colCanon]) continue;
+        records.push({
+          raw_product_code: r[colRaw].toString().trim(),
+          canonical_brand: colBrand !== -1 && r[colBrand] ? r[colBrand].toString().trim() : null,
+          canonical_product_code: r[colCanon].toString().trim()
+        });
+      }
+      
+      document.getElementById("clubbingUpStatus").innerHTML = `Uploading ${records.length} records...`;
+      document.getElementById("clubbingProgBar").style.width = "60%";
+      
+      // Upload in chunks of 500
+      for (let i = 0; i < records.length; i += 500) {
+        const chunk = records.slice(i, i + 500);
+        const upRes = await fetch(SUPABASE_URL + '/rest/v1/product_clubbing', {
+          method: 'POST',
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify(chunk)
+        });
+        if (!upRes.ok) throw new Error('Failed to upload chunk');
+        document.getElementById("clubbingProgBar").style.width = Math.min(60 + (i / records.length) * 40, 100) + "%";
+      }
+      
+      document.getElementById("clubbingUpStatus").innerHTML = `<span style="color:green;">Success: ${records.length} mappings uploaded! Note: Sales/Stock merging will apply on next uploads.</span>`;
+      document.getElementById("clubbingProgBar").style.width = "100%";
+      document.getElementById("clubbingFileInput").value = "";
+    } catch (err) {
+      console.error(err);
+      document.getElementById("clubbingUpStatus").innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+      document.getElementById("clubbingProgBar").style.width = "0%";
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+</script>
 <link rel="icon" href="adonis-logo.png" type="image/png" />
 <script src="xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
@@ -2659,11 +2730,7 @@ async function loadStockStatementData(){
     let productCode = normalizeEmpId(r.canonical_product_code || r.raw_product_code || r.raw_product_name || r.brand);
     let productKey = productCode;
     
-    // Merge -FREE variants into their parent product code
-    if (productCode.endsWith('-FREE')) {
-      productCode = productCode.substring(0, productCode.length - 5);
-      productKey = productCode;
-    }
+
 
     const key = `${stockistCode}|${productCode}`;
     const mappingRow = visibleStockistMap.get(stockistCode) || {};
@@ -3808,6 +3875,7 @@ function renderAdmin(){
   document.getElementById("fileInput").onchange = handleUpload;
   document.getElementById("empFileInput").onchange = handleEmployeeUpload;
   document.getElementById("targetFileInput").onchange = handleTargetUpload;
+  document.getElementById("clubbingFileInput").onchange = handleClubbingUpload;
   document.getElementById("expiryFileInput").onchange = handleExpiryUpload;
   document.getElementById("smFileInput").onchange = handleStockistMappingUpload;
   loadUploadedFiles();
