@@ -8,33 +8,11 @@
 <meta http-equiv="Expires" content="0" />
 <title>Adonis Field Force — Sales Dashboard</title>
 <script src="supabase.js">
-async function handleClubbingUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  document.getElementById("clubbingUpStatus").innerHTML = "Parsing file...";
-  document.getElementById("clubbingProgBar").style.width = "10%";
-  
-  const reader = new FileReader();
-  reader.onload = async (evt) => {
-    try {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      
-      const headers = rows[0].map(h => (h || '').toString().toLowerCase().trim());
-      const colRaw = headers.indexOf('raw_product_code');
-      const colBrand = headers.indexOf('canonical_brand');
-      const colCanon = headers.indexOf('canonical_product_code');
-      
-      if (colRaw === -1 || colCanon === -1) {
-        throw new Error('Required columns: raw_product_code, canonical_product_code');
-      }
       
       document.getElementById("clubbingUpStatus").innerHTML = "Deleting old mappings...";
       document.getElementById("clubbingProgBar").style.width = "30%";
       
-      const delRes = await fetch(SUPABASE_URL + '/rest/v1/product_clubbing', {
+      const delRes = await fetch(SUPABASE_URL + '/rest/v1/product_clubbing?raw_product_code=not.is.null', {
         method: 'DELETE',
         headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
       });
@@ -6856,6 +6834,30 @@ window.loadCfaSummary = async function() {
   }
   btn.textContent = "View Summary Table";
 };
+
+
+async function handleClubbingUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById("clubbingUpStatus").innerHTML = "Parsing file...";
+  document.getElementById("clubbingProgBar").style.width = "10%";
+  
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      const headers = rows[0].map(h => (h || '').toString().toLowerCase().trim());
+      const colRaw = headers.indexOf('raw_product_code');
+      const colBrand = headers.indexOf('canonical_brand');
+      const colCanon = headers.indexOf('canonical_product_code');
+      
+      if (colRaw === -1 || colCanon === -1) {
+        throw new Error('Required columns: raw_product_code, canonical_product_code');
+      }
 
 </script>
 </body>
