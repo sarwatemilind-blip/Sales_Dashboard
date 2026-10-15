@@ -6524,7 +6524,6 @@ window.exportIncentives = async function() {
 
   try {
     const originalEmpId = selectedEmpId;
-    // Get all BEs in the downline
     const bes = allDownlineEmployees.filter(e => e.designation === 'BE');
     if (bes.length === 0) {
       alert('No BEs found in your scope to export.');
@@ -6534,75 +6533,212 @@ window.exportIncentives = async function() {
     }
 
     const rows = [];
-    
+
+    // Helpers
+    const v = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+    const txt = (id) => { const el = document.getElementById(id); return el ? (el.textContent || el.innerText || '').trim() : ''; };
+    const num = (id) => { const raw = txt(id).replace(/[^0-9.\-]/g, ''); return parseFloat(raw) || 0; };
+    const msg = (id) => {
+      const el = document.getElementById(id);
+      if (!el || el.style.display === 'none') return 'Qualified';
+      return (el.textContent || el.innerText || '').replace(/\s+/g, ' ').trim();
+    };
+    const pct = (x) => (x === null || x === undefined || isNaN(x)) ? 'N/A' : (x * 100).toFixed(1) + '%';
+    const amt = (x) => Math.round(x || 0);
+
+    // Period labels
+    const mLbl = FY_MONTHS.find(m => m.n === currentMonth)?.label || String(currentMonth);
+    const nextM = (currentMonth % 12) + 1;
+    const nextMLbl = FY_MONTHS.find(m => m.n === nextM)?.label || '';
+    const biCycleStart = currentMonth % 2 === 1 ? currentMonth : currentMonth - 1;
+    const biCycleEnd = biCycleStart + 1;
+    const biStartLbl = FY_MONTHS.find(m => m.n === biCycleStart)?.label || '';
+    const biEndLbl = FY_MONTHS.find(m => m.n === biCycleEnd)?.label || '';
+    const hStart = Math.floor((currentMonth - 1) / 4) * 4 + 1;
+    const hEnd = hStart + 3;
+    const hStartLbl = FY_MONTHS.find(m => m.n === hStart)?.label || '';
+    const hEndLbl = FY_MONTHS.find(m => m.n === hEnd)?.label || '';
+
     for (let be of bes) {
       selectedEmpId = be.emp_id;
-      // Wait for UI to render and calculate
+      exportBtn.innerText = 'Generating... (' + (rows.length + 1) + '/' + bes.length + ')';
       await renderIncentive();
-      
-      const m_tgt = document.getElementById('m-target').value;
-      const m_act = document.getElementById('m-actual').value;
-      const m_earned = document.getElementById('m-total-disp').innerText.replace(/[^\d.-]/g, '');
-      
-      const b_tgt = document.getElementById('b-target').value;
-      const b_act = document.getElementById('b-actual').value;
-      const b_earned = document.getElementById('b-total-disp').innerText.replace(/[^\d.-]/g, '');
 
-      const a_tgt = document.getElementById('a-target').value;
-      const a_act = document.getElementById('a-actual').value;
-      const a_earned = document.getElementById('a-total-disp').innerText.replace(/[^\d.-]/g, '');
+      // Monthly
+      const m_tgt = v('m-target');
+      const m_act = v('m-actual');
+      const m_ly = v('m-ly');
+      const m_achv = m_tgt > 0 ? m_act / m_tgt : 0;
+      const m_gr = m_ly > 0 ? (m_act / m_ly - 1) : null;
+      const m_earned = num('m-total-disp');
+      const m_status = msg('m-no-inc');
+      const mNext_tgt = (window.buckets && window.buckets.monthlyNext) ? window.buckets.monthlyNext.t : 0;
+      const mNext_act = (window.buckets && window.buckets.monthlyNext) ? window.buckets.monthlyNext.a : 0;
+      const mNext_achv = mNext_tgt > 0 ? mNext_act / mNext_tgt : 0;
+      const mPillar_tgt = (window.buckets && window.buckets.monthlyPillarCurrent) ? window.buckets.monthlyPillarCurrent.t : 0;
+      const mPillar_act = (window.buckets && window.buckets.monthlyPillarCurrent) ? window.buckets.monthlyPillarCurrent.a : 0;
+      const mPillar_achv = mPillar_tgt > 0 ? mPillar_act / mPillar_tgt : 0;
 
-      const p_tgt = document.getElementById('p-target').value;
-      const p_act = document.getElementById('p-actual').value;
-      const p_earned = document.getElementById('p-total-disp').innerText.replace(/[^\d.-]/g, '');
+      // Bimonthly
+      const b_tgt = v('b-target');
+      const b_act = v('b-actual');
+      const b_ly = v('b-ly');
+      const b_achv = b_tgt > 0 ? b_act / b_tgt : 0;
+      const b_gr = b_ly > 0 ? (b_act / b_ly - 1) : null;
+      const b_earned = num('b-total-disp');
+      const b_status = msg('b-no-inc');
+      const bNext_tgt = (window.buckets && window.buckets.bimonthlyNext) ? window.buckets.bimonthlyNext.t : 0;
+      const bNext_act = (window.buckets && window.buckets.bimonthlyNext) ? window.buckets.bimonthlyNext.a : 0;
+      const bNext_achv = bNext_tgt > 0 ? bNext_act / bNext_tgt : 0;
+      const bPillar_tgt = (window.buckets && window.buckets.bimonthlyPillarCurrent) ? window.buckets.bimonthlyPillarCurrent.t : 0;
+      const bPillar_act = (window.buckets && window.buckets.bimonthlyPillarCurrent) ? window.buckets.bimonthlyPillarCurrent.a : 0;
+      const bPillar_achv = bPillar_tgt > 0 ? bPillar_act / bPillar_tgt : 0;
 
-      const boty_tgt = document.getElementById('by-target').value;
-      const boty_act = document.getElementById('by-actual').value;
-      const boty_earned = document.getElementById('by-total-disp').innerText.replace(/[^\d.-]/g, '');
+      // Pillar (Servil Jr / LS Jr)
+      const p_tgt = v('p-target');
+      const p_act = v('p-actual');
+      const p_ly = v('p-ly');
+      const p_achv = p_tgt > 0 ? p_act / p_tgt : 0;
+      const p_earned = num('p-total-disp');
+      const p_status = msg('p-no-inc');
+      const pNext_tgt = (window.buckets && window.buckets.pillarNext) ? window.buckets.pillarNext.t : 0;
+      const pNext_act = (window.buckets && window.buckets.pillarNext) ? window.buckets.pillarNext.a : 0;
+      const pNext_achv = pNext_tgt > 0 ? pNext_act / pNext_tgt : 0;
 
-      const h_sales = document.getElementById('h-sales').value;
-      const h_expiry = document.getElementById('h-expiry').value;
-      const h_earned = document.getElementById('h-total-disp').innerText.replace(/[^\d.-]/g, '');
+      // BOTY (MV 30 Tab/Syp)
+      const by_tgt = v('by-target');
+      const by_act = v('by-actual');
+      const by_ly = v('by-ly');
+      const by_achv = by_tgt > 0 ? by_act / by_tgt : 0;
+      const by_earned = num('by-total-disp');
+      const by_status = msg('by-no-inc');
+      const byNext_tgt = (window.buckets && window.buckets.botyNext) ? window.buckets.botyNext.t : 0;
+      const byNext_act = (window.buckets && window.buckets.botyNext) ? window.buckets.botyNext.a : 0;
+      const byNext_achv = byNext_tgt > 0 ? byNext_act / byNext_tgt : 0;
 
-      const total_earned = document.getElementById('grand-total-disp').innerText.replace(/[^\d.-]/g, '');
+      // Hygiene
+      const h_sales = v('h-sales');
+      const h_ly = v('h-ly');
+      const h_expiry = v('h-expiry');
+      const h_tgt = (window.buckets && window.buckets.hygieneCycle) ? window.buckets.hygieneCycle.t : 0;
+      const h_tgt_achv = h_tgt > 0 ? h_sales / h_tgt : 0;
+      const h_exp_pct = h_sales > 0 ? h_expiry / h_sales : 0;
+      const h_gr = h_ly > 0 ? (h_sales / h_ly - 1) : null;
+      const h_earned = num('h-total-disp');
+      const h_status = msg('h-no-inc');
+      const h_hyg_status = txt('h-status-disp');
+
+      const hier = typeof getBEHierarchy === 'function' ? getBEHierarchy(be.emp_id) : {};
+
+      // Remarks collection
+      const remarks = [];
+      if (m_status && m_status !== 'Qualified') remarks.push('Monthly: ' + m_status);
+      if (b_status && b_status !== 'Qualified') remarks.push('Bimonthly: ' + b_status);
+      if (p_status && p_status !== 'Qualified') remarks.push('Pillar: ' + p_status);
+      if (by_status && by_status !== 'Qualified') remarks.push('BOTY: ' + by_status);
+      if (h_status && h_status !== 'Qualified') remarks.push('Hygiene: ' + h_status);
 
       rows.push({
-        "BE ID": be.emp_id,
-        "BE Name": be.name,
-        "Manager ID": be.manager_emp_id,
-        "Monthly Target": parseFloat(m_tgt) || 0,
-        "Monthly Actual": parseFloat(m_act) || 0,
-        "Monthly Earned": parseFloat(m_earned) || 0,
-        "Bimonthly Target": parseFloat(b_tgt) || 0,
-        "Bimonthly Actual": parseFloat(b_act) || 0,
-        "Bimonthly Earned": parseFloat(b_earned) || 0,
-        "Annual Target": parseFloat(a_tgt) || 0,
-        "Annual Actual": parseFloat(a_act) || 0,
-        "Annual Earned": parseFloat(a_earned) || 0,
-        "Servil Jr/LS Jr Target": parseFloat(p_tgt) || 0,
-        "Servil Jr/LS Jr Actual": parseFloat(p_act) || 0,
-        "Servil Jr/LS Jr Earned": parseFloat(p_earned) || 0,
-        "MV 30 Tab/Syp Target": parseFloat(boty_tgt) || 0,
-        "MV 30 Tab/Syp Actual": parseFloat(boty_act) || 0,
-        "MV 30 Tab/Syp Earned": parseFloat(boty_earned) || 0,
-        "Hygiene Sales": parseFloat(h_sales) || 0,
-        "Hygiene Expiry": parseFloat(h_expiry) || 0,
-        "Hygiene Earned": parseFloat(h_earned) || 0,
-        "Total Earned": parseFloat(total_earned) || 0
+        'BE ID': be.emp_id,
+        'BE Name': be.name,
+        'Headquarter': be.hq_name || '',
+        'State': be.state || '',
+        'ASM': (hier && hier.asm) || '',
+        'RSM': (hier && hier.rsm) || '',
+
+        // Monthly
+        [mLbl + ' ' + currentYear + ' Monthly Target']: amt(m_tgt),
+        [mLbl + ' ' + currentYear + ' Monthly Actual']: amt(m_act),
+        [mLbl + ' ' + currentYear + ' % Ach']: pct(m_achv),
+        [mLbl + ' ' + currentYear + ' Pillar Brand Ach%']: pct(mPillar_achv),
+        [nextMLbl + ' ' + currentYear + ' % Ach']: pct(mNext_achv),
+        ['Month Gr']: pct(m_gr),
+        [mLbl + ' ' + currentYear + ' Monthly Earned']: amt(m_earned),
+        ['Sales Less for payment > 30 days (?)']: '',
+        ['CN (Brk / Exp) (?)']: '',
+        ['% to Sales']: '',
+        ['Deduction of Sales (?)']: '',
+        ['Sales Eligible for Incentive (?)']: amt(m_act),
+        [mLbl.toUpperCase() + ' ' + currentYear + ' Incentive Payable (?)']: amt(m_earned),
+
+        // Bimonthly
+        [biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Target']: amt(b_tgt),
+        [biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Actual']: amt(b_act),
+        [biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' % Ach']: pct(b_achv),
+        [biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Pillar Brand Ach%']: pct(bPillar_achv),
+        [biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Earned']: amt(b_earned),
+
+        // Pillar Brand
+        ['Servil Jr/LS Jr Target']: amt(p_tgt),
+        ['Servil Jr/LS Jr Actual']: amt(p_act),
+        ['Servil Jr/LS Jr % Ach']: pct(p_achv),
+        [nextMLbl + ' ' + currentYear + ' SEJ/SLJ % Ach']: pct(pNext_achv),
+        ['Servil Jr/LS Jr Earned']: amt(p_earned),
+
+        // BOTY Brand
+        ['MV 30 Tab/Syp Target']: amt(by_tgt),
+        ['MV 30 Tab/Syp Actual']: amt(by_act),
+        ['MV 30 Tab/Syp % Ach']: pct(by_achv),
+        [nextMLbl + ' ' + currentYear + ' MV30 % Ach']: pct(byNext_achv),
+        ['MV 30 Tab/Syp Earned']: amt(by_earned),
+
+        // Sales Hygiene
+        ['Hygiene Sales']: amt(h_sales),
+        ['Hygiene Expiry']: amt(h_expiry),
+        ['Hygiene % Ach']: pct(h_exp_pct),
+        ['Hygiene Earned']: amt(h_earned),
+
+        // Total
+        ['Total Earned']: amt(m_earned + b_earned + p_earned + by_earned + h_earned),
+        ['Remarks']: remarks.join('; ')
       });
     }
-    
-    // Restore original selected emp
+
     selectedEmpId = originalEmpId;
     await renderIncentive();
-    
+
     const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Full Detail
     const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, "Incentives");
-    
-    const lbl = typeof monthLabel === 'function' ? monthLabel(currentMonth) : FY_MONTHS.find(m => m.n === currentMonth)?.label;
-    XLSX.writeFile(wb, `Incentives_Report_${lbl}_${currentYear}.xlsx`);
-    
+    if (rows.length > 0) {
+      const cols = Object.keys(rows[0]);
+      ws['!cols'] = cols.map(col => {
+        const maxLen = Math.max(col.length, ...rows.map(r => String(r[col] != null ? r[col] : '').length));
+        return { wch: Math.min(maxLen + 2, 42) };
+      });
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Incentives');
+
+    // Sheet 2: Summary
+    const summaryRows = rows.map(r => ({
+      'BE ID': r['BE ID'],
+      'BE Name': r['BE Name'],
+      'Headquarter': r['Headquarter'],
+      'State': r['State'],
+      'ASM': r['ASM'],
+      'RSM': r['RSM'],
+      ['Monthly Earned']: r[mLbl + ' ' + currentYear + ' Monthly Earned'],
+      ['Bimonthly Earned']: r[biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Earned'],
+      ['Servil Jr/LS Jr Earned']: r['Servil Jr/LS Jr Earned'],
+      ['MV 30 Tab/Syp Earned']: r['MV 30 Tab/Syp Earned'],
+      ['Hygiene Earned']: r['Hygiene Earned'],
+      ['Total Earned']: r['Total Earned'],
+      ['Remarks']: r['Remarks']
+    }));
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    if (summaryRows.length > 0) {
+      const cols = Object.keys(summaryRows[0]);
+      wsSummary['!cols'] = cols.map(col => {
+        const maxLen = Math.max(col.length, ...summaryRows.map(r => String(r[col] != null ? r[col] : '').length));
+        return { wch: Math.min(maxLen + 2, 42) };
+      });
+    }
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    const lbl = FY_MONTHS.find(m => m.n === currentMonth)?.label || String(currentMonth);
+    XLSX.writeFile(wb, 'Incentives_Report_' + lbl + '_' + currentYear + '.xlsx');
+
   } catch (err) {
     console.error(err);
     alert('Export failed: ' + err.message);
