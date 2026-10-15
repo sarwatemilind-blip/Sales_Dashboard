@@ -5637,6 +5637,7 @@ const incentiveHTML = `\n<style>
     <div class="inc-total-amount" id="h-total-disp">₹0</div>
     <div class="inc-total-note">Expiry/Breakage Control · Period: 4 Months</div>
   </div>
+  <div class="inc-degrowth-banner" id="h-degrowth-banner" style="display:none;">⚠️ Degrowth vs last year — no incentive payable</div>
   <div class="inc-no-incentive-msg" id="h-no-inc" style="display:none; margin: 12px 15px 0;">No incentive — expiry exceeds 1% of sales</div>
   <div class="inc-section-card open">
     <div class="inc-section-header" onclick="toggleSection(this)">
@@ -5645,15 +5646,21 @@ const incentiveHTML = `\n<style>
     </div>
     <div class="inc-section-body">
       <div class="inc-hygiene-note">
-        Lower expiry as a % of sales = better hygiene = higher incentive. Must achieve 90% of target for the 4-month cycle.
+        Lower expiry as a % of sales = better hygiene = higher incentive. Must achieve 90% of target and positive sales growth over same period last year for the 4-month cycle.
       </div>
       <div class="inc-field-group">
         <div class="inc-field-row">
           <div><div class="inc-field-label">Sales Value (₹)</div><div class="inc-inp-wrap"><span class="inc-inp-prefix">₹</span><input type="number" id="h-sales" placeholder="Enter sales" min="0" oninput="calcAll()"></div></div>
+          <div>
+            <div class="inc-field-label">Last Year Same Period (₹) <span style="color:#aaa;font-weight:400">(optional)</span></div>
+            <div class="inc-inp-wrap"><span class="inc-inp-prefix">₹</span><input type="number" id="h-ly" placeholder="0" min="0" oninput="calcAll()"></div>
+            <div class="inc-inp-hint">Leave 0 if no LY data — growth check will be skipped</div>
+          </div>
           <div><div class="inc-field-label">Expiry/Breakage (₹)</div><div class="inc-inp-wrap"><span class="inc-inp-prefix">₹</span><input type="number" id="h-expiry" placeholder="Enter expiry" min="0" oninput="calcAll()"></div></div>
         </div>
       </div>
       <div class="inc-metrics-row">
+        <div class="inc-metric-card"><div class="inc-metric-label">Growth vs LY</div><div class="inc-metric-value" id="h-growth-disp">—</div></div>
         <div class="inc-metric-card"><div class="inc-metric-label">Expiry % of Sales</div><div class="inc-metric-value" id="h-pct-disp">—</div></div>
         <div class="inc-metric-card"><div class="inc-metric-label">Hygiene Status</div><div class="inc-metric-value" id="h-status-disp">—</div></div>
       </div>
@@ -5946,21 +5953,44 @@ function calcHygiene() {
   
   const expiryInput = expiryEl ? expiryEl.value : String(autoExpiry);
   const expiry = Math.abs(parseFloat(expiryInput) || 0);
-  // If autoExpiry > 0, it means it's available. If 0, it might be 0, but we need to ensure it was uploaded.
-  // We'll assume if it was uploaded and is 0, they can still qualify. Wait, if it's 0, how do we know it was uploaded vs missing?
-  // We'll consider it entered if there's any data for the period.
   const isExpiryEntered = (window.buckets && window.buckets.hygieneExpiry && window.buckets.hygieneExpiry.a !== undefined);
   const pct = sales > 0 ? expiry / sales : 0;
 
   const pctEl = document.getElementById('h-pct-disp');
-  pctEl.textContent = sales > 0 ? incFmtPct(pct) : '—';
-  pctEl.className = 'inc-metric-value' + (pct <= 0.006 ? ' good' : pct <= 0.01 ? '' : ' bad');
+  if (pctEl) {
+    pctEl.textContent = sales > 0 ? incFmtPct(pct) : '—';
+    pctEl.className = 'inc-metric-value' + (pct <= 0.006 ? ' good' : pct <= 0.01 ? '' : ' bad');
+  }
 
   const statusEl = document.getElementById('h-status-disp');
-  if (sales === 0) { statusEl.textContent = '-'; statusEl.className = 'inc-metric-value'; }
-  else if (pct <= 0.006) { statusEl.textContent = 'Excellent'; statusEl.className = 'inc-metric-value good'; }
-  else if (pct <= 0.01) { statusEl.textContent = 'Moderate'; statusEl.className = 'inc-metric-value'; }
-  else { statusEl.textContent = 'Poor'; statusEl.className = 'inc-metric-value bad'; }
+  if (statusEl) {
+    if (sales === 0) { statusEl.textContent = '-'; statusEl.className = 'inc-metric-value'; }
+    else if (pct <= 0.006) { statusEl.textContent = 'Excellent'; statusEl.className = 'inc-metric-value good'; }
+    else if (pct <= 0.01) { statusEl.textContent = 'Moderate'; statusEl.className = 'inc-metric-value'; }
+    else { statusEl.textContent = 'Poor'; statusEl.className = 'inc-metric-value bad'; }
+  }
+
+  // LY Sales & Growth check
+  const lyEl = document.getElementById('h-ly');
+  const ly = lyEl ? (parseFloat(lyEl.value) || 0) : ((window.buckets && window.buckets.hygieneCycle) ? (window.buckets.hygieneCycle.ly || 0) : 0);
+  const growth = ly > 0 ? (sales / ly - 1) : null;
+  const isDegrowth = ly > 0 && growth <= 0;
+
+  const growthEl = document.getElementById('h-growth-disp');
+  if (growthEl) {
+    if (growth === null) {
+      growthEl.textContent = 'N/A';
+      growthEl.className = 'inc-metric-value neutral';
+    } else {
+      growthEl.textContent = (growth >= 0 ? '+' : '') + incFmtPct(growth);
+      growthEl.className = 'inc-metric-value' + (growth > 0 ? ' good' : ' bad');
+    }
+  }
+
+  const degrowthBanner = document.getElementById('h-degrowth-banner');
+  if (degrowthBanner) {
+    degrowthBanner.style.display = isDegrowth ? 'flex' : 'none';
+  }
 
   let earned = 0;
   let isQualifying = true;
@@ -5981,6 +6011,9 @@ function calcHygiene() {
   } else if (targetAchvPct < 0.90) {
     isQualifying = false;
     qualMsg = `Target achievement is below 90% (${(targetAchvPct * 100).toFixed(1)}%)`;
+  } else if (isDegrowth) {
+    isQualifying = false;
+    qualMsg = `No growth vs same period last year (${(growth * 100).toFixed(1)}%)`;
   } else {
     if (pct >= 0 && pct <= 0.006) earned = sales * 0.010;
     else if (pct > 0.006 && pct <= 0.010) earned = sales * 0.005;
@@ -5991,13 +6024,13 @@ function calcHygiene() {
   const noIncMsg = document.getElementById('h-no-inc');
   if (!isQualifying && noIncMsg) {
     noIncMsg.style.display = 'block';
-    noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> - ${qualMsg}</span>`;
+    noIncMsg.innerHTML = `<span style="color:var(--danger)"><b>No incentive</b> — ${qualMsg}</span>`;
   } else if (noIncMsg) {
     noIncMsg.style.display = 'none';
   }
 
   document.getElementById('h-total-disp').textContent = fmt(earned);
-  return earned;
+  return { earned, blocked: isDegrowth, growth };
 }
 
 function calcAll() {
@@ -6044,8 +6077,11 @@ function calcAll() {
   const p = calcSection('p', 'pillar', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: pNextAchvPct, currentBimonthlyAchvPct: currentBimonthlyAchvPct });
   const by = calcSection('by', 'boty', { nextMonthAchvPct: bNextAchvPct, nextMonthBrandAchvPct: byNextAchvPct, currentBimonthlyAchvPct: currentBimonthlyAchvPct });
   const h = calcHygiene();
+  const hEarned = typeof h === 'object' ? h.earned : h;
+  const hBlocked = typeof h === 'object' ? h.blocked : false;
+  const hGrowth = typeof h === 'object' ? h.growth : null;
 
-  const total = m.earned + b.earned + a.earned + p.earned + by.earned + h;
+  const total = m.earned + b.earned + a.earned + p.earned + by.earned + hEarned;
   document.getElementById('grand-total-disp').textContent = fmt(total);
 
   // Summary cards
@@ -6055,7 +6091,7 @@ function calcAll() {
     {key:'annual', label:'Annual', period:'12 Months', earned:a.earned, blocked:a.blocked, growth:a.growth},
     {key:'pillar', label:'Servil Jr/LS Jr', period:'2 Months', earned:p.earned, blocked:p.blocked, growth:p.growth},
     {key:'boty', label:'MV 30 Tab/Syp', period:'2 Months', earned:by.earned, blocked:by.blocked, growth:by.growth},
-    {key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:h, blocked:false, growth:null},
+    {key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:hEarned, blocked:hBlocked, growth:hGrowth},
   ];
 
   let gridHtml = '';
@@ -6334,7 +6370,7 @@ async function renderIncentive() {
   // 4. Aggregators
   const buckets = window.buckets = {
     hygieneExpiry: {a: 0},
-    hygieneCycle: { t: 0, a: 0 },
+    hygieneCycle: { t: 0, a: 0, ly: 0 },
     annualPillar: { t: 0, a: 0 },
     annualNextQuarter: { t: 0, a: 0 },
     monthly: { t: 0, a: 0, ly: 0 },
@@ -6425,6 +6461,7 @@ async function renderIncentive() {
   lastYear.forEach(r => {
     const m = parseInt(r.period_month, 10);
     const val = parseFloat(r.amount) || 0;
+    if (m >= hStart && m <= hEnd) { buckets.hygieneCycle.ly += val; }
     buckets.annual.ly += val;
     if (m === currentMonth) buckets.monthly.ly += val;
     if (biCycle.includes(m)) {
@@ -6469,6 +6506,8 @@ async function renderIncentive() {
   // We'll set the sales to the full YTD actuals, but let them type the expiry themselves.
   const hSales = document.getElementById('h-sales');
   if (hSales) { hSales.value = Math.round(buckets.hygieneCycle.a); } // Not readonly, they can adjust if they want.
+  const hLy = document.getElementById('h-ly');
+  if (hLy) { hLy.value = Math.round(buckets.hygieneCycle.ly || 0); }
 
   // 6. Trigger calculations
   if (typeof calcAll === 'function') {
