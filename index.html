@@ -6619,7 +6619,7 @@ window.exportIncentives = async function() {
       // Hygiene
       const h_sales = v('h-sales');
       const h_ly = v('h-ly');
-      const h_expiry = v('h-expiry');
+      const h_expiry = (window.buckets && window.buckets.hygieneExpiry && window.buckets.hygieneExpiry.a) ? Math.abs(window.buckets.hygieneExpiry.a) : (v('h-expiry') || 0);
       const h_tgt = (window.buckets && window.buckets.hygieneCycle) ? window.buckets.hygieneCycle.t : 0;
       const h_tgt_achv = h_tgt > 0 ? h_sales / h_tgt : 0;
       const h_exp_pct = h_sales > 0 ? h_expiry / h_sales : 0;
