@@ -5736,6 +5736,12 @@ const HYGIENE_SLABS = [
   {name:'Slab 2', from:0.006, to:0.010, rate:0.005},
 ];
 
+function canViewHygiene() {
+  if (typeof session === 'undefined' || !session) return false;
+  const eid = (session.emp_id || '').toUpperCase().trim();
+  return !!(session.is_admin || session.designation === 'ADMIN' || eid === 'ADLA02');
+}
+
 function fmt(n) {
   if (n === 0) return '₹0';
   return '₹' + Math.round(n).toLocaleString('en-IN');
@@ -6081,7 +6087,8 @@ function calcAll() {
   const hBlocked = typeof h === 'object' ? h.blocked : false;
   const hGrowth = typeof h === 'object' ? h.growth : null;
 
-  const total = m.earned + b.earned + a.earned + p.earned + by.earned + hEarned;
+  const allowHyg = canViewHygiene();
+  const total = m.earned + b.earned + a.earned + p.earned + by.earned + (allowHyg ? hEarned : 0);
   document.getElementById('grand-total-disp').textContent = fmt(total);
 
   // Summary cards
@@ -6091,8 +6098,10 @@ function calcAll() {
     {key:'annual', label:'Annual', period:'12 Months', earned:a.earned, blocked:a.blocked, growth:a.growth},
     {key:'pillar', label:'Servil Jr/LS Jr', period:'2 Months', earned:p.earned, blocked:p.blocked, growth:p.growth},
     {key:'boty', label:'MV 30 Tab/Syp', period:'2 Months', earned:by.earned, blocked:by.blocked, growth:by.growth},
-    {key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:hEarned, blocked:hBlocked, growth:hGrowth},
   ];
+  if (allowHyg) {
+    categories.push({key:'hygiene', label:'Sales Hygiene', period:'4 Months', earned:hEarned, blocked:hBlocked, growth:hGrowth});
+  }
 
   let gridHtml = '';
   categories.forEach(c => {
@@ -6122,6 +6131,9 @@ function calcAll() {
 }
 
 function switchTab(tab) {
+  if (tab === 'hygiene' && !canViewHygiene()) {
+    tab = 'monthly';
+  }
   document.querySelectorAll('.inc-tab-btn').forEach(b => b.classList.remove('active', 'selected-tab'));
   document.querySelectorAll('.inc-content').forEach(c => c.style.display = 'none');
   
@@ -6240,6 +6252,11 @@ async function renderIncentive() {
     } else {
       exportBtn.style.display = 'none';
     }
+  }
+
+  const tabHygiene = document.getElementById('tab-hygiene');
+  if (tabHygiene) {
+    tabHygiene.style.display = canViewHygiene() ? '' : 'none';
   }
 
   // 2. Determine cycles
@@ -6630,15 +6647,17 @@ window.exportIncentives = async function() {
 
       const hier = typeof getBEHierarchy === 'function' ? getBEHierarchy(be.emp_id) : {};
 
+      const allowExportHyg = canViewHygiene();
+
       // Remarks collection
       const remarks = [];
       if (m_status && m_status !== 'Qualified') remarks.push('Monthly: ' + m_status);
       if (b_status && b_status !== 'Qualified') remarks.push('Bimonthly: ' + b_status);
       if (p_status && p_status !== 'Qualified') remarks.push('Pillar: ' + p_status);
       if (by_status && by_status !== 'Qualified') remarks.push('BOTY: ' + by_status);
-      if (h_status && h_status !== 'Qualified') remarks.push('Hygiene: ' + h_status);
+      if (allowExportHyg && h_status && h_status !== 'Qualified') remarks.push('Hygiene: ' + h_status);
 
-      rows.push({
+      const row = {
         'BE ID': be.emp_id,
         'BE Name': be.name,
         'Headquarter': be.hq_name || '',
@@ -6681,17 +6700,20 @@ window.exportIncentives = async function() {
         ['MV 30 Tab/Syp % Ach']: pct(by_achv),
         [nextMLbl + ' ' + currentYear + ' MV30 % Ach']: pct(byNext_achv),
         ['MV 30 Tab/Syp Earned']: amt(by_earned),
+      };
 
-        // Sales Hygiene
-        ['Hygiene Sales']: amt(h_sales),
-        ['Hygiene Expiry']: amt(h_expiry),
-        ['Hygiene % Ach']: pct(h_exp_pct),
-        ['Hygiene Earned']: amt(h_earned),
+      if (allowExportHyg) {
+        row['Hygiene Sales'] = amt(h_sales);
+        row['Hygiene Expiry'] = amt(h_expiry);
+        row['Hygiene % Ach'] = pct(h_exp_pct);
+        row['Hygiene Earned'] = amt(h_earned);
+      }
 
-        // Total
-        ['Total Earned']: amt(m_earned + b_earned + p_earned + by_earned + h_earned),
-        ['Remarks']: remarks.join('; ')
-      });
+      // Total
+      row['Total Earned'] = amt(m_earned + b_earned + p_earned + by_earned + (allowExportHyg ? h_earned : 0));
+      row['Remarks'] = remarks.join('; ');
+
+      rows.push(row);
     }
 
     selectedEmpId = originalEmpId;
@@ -6711,21 +6733,26 @@ window.exportIncentives = async function() {
     XLSX.utils.book_append_sheet(wb, ws, 'Incentives');
 
     // Sheet 2: Summary
-    const summaryRows = rows.map(r => ({
-      'BE ID': r['BE ID'],
-      'BE Name': r['BE Name'],
-      'Headquarter': r['Headquarter'],
-      'State': r['State'],
-      'ASM': r['ASM'],
-      'RSM': r['RSM'],
-      ['Monthly Earned']: r[mLbl + ' ' + currentYear + ' Monthly Earned'],
-      ['Bimonthly Earned']: r[biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Earned'],
-      ['Servil Jr/LS Jr Earned']: r['Servil Jr/LS Jr Earned'],
-      ['MV 30 Tab/Syp Earned']: r['MV 30 Tab/Syp Earned'],
-      ['Hygiene Earned']: r['Hygiene Earned'],
-      ['Total Earned']: r['Total Earned'],
-      ['Remarks']: r['Remarks']
-    }));
+    const summaryRows = rows.map(r => {
+      const s = {
+        'BE ID': r['BE ID'],
+        'BE Name': r['BE Name'],
+        'Headquarter': r['Headquarter'],
+        'State': r['State'],
+        'ASM': r['ASM'],
+        'RSM': r['RSM'],
+        ['Monthly Earned']: r[mLbl + ' ' + currentYear + ' Monthly Earned'],
+        ['Bimonthly Earned']: r[biStartLbl + '-' + biEndLbl + ' ' + currentYear + ' Bimonthly Earned'],
+        ['Servil Jr/LS Jr Earned']: r['Servil Jr/LS Jr Earned'],
+        ['MV 30 Tab/Syp Earned']: r['MV 30 Tab/Syp Earned'],
+      };
+      if (canViewHygiene()) {
+        s['Hygiene Earned'] = r['Hygiene Earned'];
+      }
+      s['Total Earned'] = r['Total Earned'];
+      s['Remarks'] = r['Remarks'];
+      return s;
+    });
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
     if (summaryRows.length > 0) {
       const cols = Object.keys(summaryRows[0]);
